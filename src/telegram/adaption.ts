@@ -186,7 +186,11 @@ export const parseContent = (text: string, entities?: MessageEntity[]): ContentN
 };
 
 export const contentToPlainText = (nodes: ContentNode[]): string =>
-  nodes.map(node => 'children' in node ? contentToPlainText(node.children) : node.text).join('');
+  nodes.map(node => {
+    if (node.type === 'forward')
+      return node.messages.map(message => contentToPlainText(message.content)).join('\n');
+    return 'children' in node ? contentToPlainText(node.children) : node.text;
+  }).join('');
 
 // --- Adapt functions ---
 

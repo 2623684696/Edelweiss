@@ -246,4 +246,118 @@ describe('adaptOneBotMessage', () => {
     expect(latestExternalEventMs(rc, 500)).toBeNull();
     expect(latestInterruptingExternalEventMs(rc, 500)).toBeNull();
   });
+
+  it('reads merged forwards once and renders first-level senders and contents in order', async () => {
+    const getForwardMessages = vi.fn(async () => [
+      {
+        user_id: 12,
+        sender: { user_id: 12, nickname: 'Alice' },
+        message: [
+          { type: 'text', data: { text: '<hello>' } },
+          { type: 'face', data: { id: '14' } },
+          { type: 'json', data: { data: '{"meta":"<unsafe>"}' } },
+        ],
+      },
+      {
+        user_id: 34,
+        sender: { user_id: 34, nickname: 'Bob' },
+        message: [
+          { type: 'text', data: { text: 'photo' } },
+          { type: 'image', data: { file: 'photo.jpg' } },
+          { type: 'forward', data: { id: 'nested' } },
+        ],
+      },
+    ] as unknown as OneBotMessageEvent[]);
+    const api = { getFriendRemark: vi.fn(async () => undefined), getForwardMessages } as unknown as OneBotApiClient;
+    const event: OneBotMessageEvent = {
+      post_type: 'message', message_type: 'group', time: 1, self_id: 999,
+      user_id: 42, group_id: 100, message_id: 7, raw_message: '',
+      sender: { user_id: 42, nickname: 'sender' },
+      message: [{ type: 'text', data: { text: 'look: ' } }, { type: 'forward', data: { id: '7' } }],
+    };
+
+    const adapted = await adaptOneBotMessage(api, event, { receivedAtMs: 1000, utcOffsetMin: 480 });
+    const xml = render(reduce(createEmptyIC('100'), adapted), { botUserId: '999' })[0]?.content.find(piece => piece.type === 'text')?.text;
+
+    expect(getForwardMessages).toHaveBeenCalledExactlyOnceWith('7');
+    expect(adapted.attachments).toEqual([{ type: 'photo', fileName: 'photo.jpg', fileRef: 'photo.jpg' }]);
+    expect(xml).toContain('look: <forwarded-messages><forwarded-message sender="Alice (12)">&lt;hello&gt;');
+    expect(xml).toContain('&lt;unsafe&gt;');
+    expect(xml).not.toContain('<unsafe>');
+    expect(xml).toContain('<forwarded-message sender="Bob (34)">photo[附件见本消息末尾][嵌套合并转发未展开]</forwarded-message>');
+    expect(xml).toContain('<attachment type="photo"');
+    expect(getForwardMessages).not.toHaveBeenCalledWith('nested');
+  });
+
+  it('uses inline forward content without requesting it again', async () => {
+    const getForwardMessages = vi.fn();
+    const api = { getFriendRemark: vi.fn(async () => undefined), getForwardMessages } as unknown as OneBotApiClient;
+    const event: OneBotMessageEvent = {
+      post_type: 'message', message_type: 'group', time: 1, self_id: 999,
+      user_id: 42, group_id: 100, message_id: 7, raw_message: '',
+      sender: { user_id: 42, nickname: 'sender' },
+      message: [{
+        type: 'forward', data: {
+          id: '7', content: [{
+            post_type: 'message', message_type: 'group', time: 1, self_id: 999,
+            user_id: 12, group_id: 100, message_id: 8, raw_message: 'inline',
+            sender: { user_id: 12, nickname: 'Alice' },
+            message: [{ type: 'text', data: { text: 'inline' } }],
+          }],
+        },
+      }],
+    };
+
+    const adapted = await adaptOneBotMessage(api, event, { receivedAtMs: 1000, utcOffsetMin: 480 });
+    expect(getForwardMessages).not.toHaveBeenCalled();
+    expect(adapted.content).toEqual([{
+      type: 'forward', messages: [{
+        senderId: '12', senderName: 'Alice', content: [{ type: 'text', text: 'inline' }],
+      }],
+    }]);
+  });
+
+  it('does not count forwarded mentions as mentions of the bot', async () => {
+    const api = {
+      getFriendRemark: vi.fn(async () => undefined),
+      getForwardMessages: vi.fn(async () => [{
+        sender: { user_id: 12, nickname: 'Alice' },
+        message: [{ type: 'at', data: { qq: '999' } }],
+      }] as unknown as OneBotMessageEvent[]),
+      getGroupMemberInfo: vi.fn(async () => ({ id: '999', displayName: 'Bot', isBot: true })),
+    } as unknown as OneBotApiClient;
+    const event: OneBotMessageEvent = {
+      post_type: 'message', message_type: 'group', time: 1, self_id: 999,
+      user_id: 42, group_id: 100, message_id: 7, raw_message: '',
+      sender: { user_id: 42, nickname: 'sender' },
+      message: [{ type: 'forward', data: { id: '7' } }],
+    };
+
+    const adapted = await adaptOneBotMessage(api, event, { receivedAtMs: 1000, utcOffsetMin: 480 });
+    const rc = render(reduce(createEmptyIC('100'), adapted), { botUserId: '999' });
+    expect(rc.some(segment => segment.mentionsMe)).toBe(false);
+    expect(rc.flatMap(segment => segment.content).filter(piece => piece.type === 'text')
+      .find(piece => piece.text.includes('<forwarded-messages>'))?.text)
+      .toContain('<mention uid="999">@Bot</mention>');
+  });
+
+  it('propagates get_forward_msg failures to the existing ingress retry policy', async () => {
+    const api = {
+      getFriendRemark: vi.fn(async () => undefined),
+      getForwardMessages: vi.fn(async () => { throw new Error('forward expired'); }),
+    } as unknown as OneBotApiClient;
+    const event: OneBotMessageEvent = {
+      post_type: 'message', message_type: 'group', time: 1, self_id: 999,
+      user_id: 42, group_id: 100, message_id: 7, raw_message: '',
+      sender: { user_id: 42, nickname: 'sender' },
+      message: [{ type: 'forward', data: { id: '7' } }],
+    };
+    await expect(adaptOneBotMessage(api, event, { receivedAtMs: 1000, utcOffsetMin: 480 }))
+      .rejects.toThrow('forward expired');
+
+    const onForwardFetchFailure = vi.fn();
+    const replayed = await adaptOneBotMessage(api, event, { receivedAtMs: 1000, utcOffsetMin: 480 }, { onForwardFetchFailure });
+    expect(onForwardFetchFailure).toHaveBeenCalledOnce();
+    expect(replayed.content).toEqual([{ type: 'text', text: '[合并转发内容不可用]' }]);
+  });
 });

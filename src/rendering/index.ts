@@ -67,6 +67,11 @@ const renderContentNode = (node: ContentNode): string => {
     if (node.altTextError)
       return `<custom-emoji error="${escapeXml(node.altTextError)}"/>`;
     return renderContent(node.children);
+  case 'forward':
+    return `<forwarded-messages>${node.messages.map(message => {
+      const sender = message.senderId ? `${message.senderName} (${message.senderId})` : message.senderName;
+      return `<forwarded-message sender="${escapeXml(sender)}">${renderContent(message.content)}</forwarded-message>`;
+    }).join('')}</forwarded-messages>`;
   case 'rich': return `<rich>${node.text}</rich>`;
   }
 };

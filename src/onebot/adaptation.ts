@@ -28,6 +28,7 @@ export interface OneBotIngressMeta {
 
 export interface OneBotAdaptationOptions {
   onMediaClassificationFailure?: (err: unknown) => void;
+  onForwardFetchFailure?: (err: unknown) => void;
 }
 
 export const captureOneBotIngressMeta = (): OneBotIngressMeta => ({
@@ -220,6 +221,47 @@ const adaptSegment = async (
   }
 };
 
+const adaptForward = async (
+  api: OneBotApiClient,
+  chatId: string,
+  messageId: string,
+  inlineMessages: OneBotMessageEvent[] | undefined,
+  attachments: CanonicalAttachment[],
+  options: OneBotAdaptationOptions,
+): Promise<ContentNode> => {
+  let messages = inlineMessages;
+  if (!messages) {
+    try {
+      messages = await api.getForwardMessages(messageId);
+    } catch (err) {
+      if (!options.onForwardFetchFailure) throw err;
+      options.onForwardFetchFailure(err);
+      return { type: 'text', text: '[合并转发内容不可用]' };
+    }
+  }
+  const entries: Extract<ContentNode, { type: 'forward' }>['messages'] = [];
+  for (const message of messages) {
+    if (!Array.isArray(message.message)) throw new Error('Invalid merged forward message');
+    const senderId = message.sender?.user_id ?? message.user_id;
+    const senderName = [message.raw?.sendRemarkName, message.raw?.sendMemberName, message.sender?.card, message.raw?.sendNickName, message.sender?.nickname]
+      .find(name => name?.trim()) ?? String(senderId ?? 'unknown');
+    const content: ContentNode[] = [];
+    for (const seg of message.message) {
+      if (seg.type === 'forward') {
+        content.push({ type: 'text', text: '[嵌套合并转发未展开]' });
+        continue;
+      }
+      if (seg.type === 'reply') continue;
+      const before = attachments.length;
+      const node = await adaptSegment(api, chatId, seg, attachments, options);
+      if (node) content.push(node.type === 'rich' ? { type: 'text', text: node.text } : node);
+      if (attachments.length > before) content.push({ type: 'text', text: '[附件见本消息末尾]' });
+    }
+    entries.push({ ...(senderId != null && { senderId: String(senderId) }), senderName, content });
+  }
+  return { type: 'forward', messages: entries };
+};
+
 // OneBotApiClient 传入用于某些消息（如 mention 的副作用）
 export const adaptOneBotMessage = async (
   api: OneBotApiClient,
@@ -237,6 +279,10 @@ export const adaptOneBotMessage = async (
   for (const seg of event.message) {
     if (seg.type === 'reply') {
       replyToMessageId = String(seg.data.id);
+      continue;
+    }
+    if (seg.type === 'forward') {
+      content.push(await adaptForward(api, chatId, seg.data.id, seg.data.content, attachments, options));
       continue;
     }
     const node = await adaptSegment(api, chatId, seg, attachments, options);

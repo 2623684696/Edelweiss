@@ -47,6 +47,8 @@ export interface OneBotApiClient {
   getChatName(chatId: string): Promise<string>;
   /** Get the bot account's friend remark for a user, if present. */
   getFriendRemark(userId: string): Promise<string | undefined>;
+  /** Get the first-level messages in a merged forward. */
+  getForwardMessages(messageId: string): Promise<OneBotMessageEvent[]>;
   /** Get 20 messages from the specified chat */
   fetchMessages(chatId: string, fromMessageId?: string): Promise<OneBotMessageEvent[]>;
 }
@@ -287,6 +289,12 @@ const createApiClient = (
 
     getFriendRemark: (userId: string): Promise<string | undefined> =>
       friendRemarkCache.get(userId),
+
+    getForwardMessages: async (messageId: string): Promise<OneBotMessageEvent[]> => {
+      const result = await call<{ messages: OneBotMessageEvent[] }>('get_forward_msg', { message_id: messageId });
+      if (!Array.isArray(result.messages)) throw new Error('get_forward_msg returned no messages');
+      return result.messages;
+    },
 
     fetchMessages: async (chatId: string, fromMessageId?: string): Promise<OneBotMessageEvent[]> => {
       const isGroup = !chatId.startsWith('private:');

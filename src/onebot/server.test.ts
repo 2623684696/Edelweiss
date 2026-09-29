@@ -174,6 +174,27 @@ describe('createOneBotServer', () => {
     await server.stop();
   });
 
+  it('requests merged-forward messages by NapCat message_id', async () => {
+    const server = createOneBotServer({ enabled: true, host: '127.0.0.1', port: 0, accessToken: '' }, {
+      onEvent: () => {}, log: useLogger('onebot-server-test'),
+    });
+    await server.start();
+    try {
+      const port = typeof server.address === 'object' ? server.address?.port : undefined;
+      const client = await connect(port!);
+      const request = new Promise<{ action: string; params: Record<string, unknown>; echo: string }>(resolve => {
+        client.once('message', data => resolve(JSON.parse(data.toString())));
+      });
+      const result = server.api!.getForwardMessages('12345');
+      const payload = await request;
+      expect(payload).toMatchObject({ action: 'get_forward_msg', params: { message_id: '12345' } });
+      client.send(JSON.stringify({ status: 'ok', retcode: 0, echo: payload.echo, data: { messages: [] } }));
+      await expect(result).resolves.toEqual([]);
+    } finally {
+      await server.stop();
+    }
+  });
+
   it('stops while a WebSocket client is still connected', async () => {
     const config: OneBotConfig = {
       enabled: true,

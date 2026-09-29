@@ -83,6 +83,11 @@ export interface OneBotJsonSegment {
   data: { data: string };
 }
 
+export interface OneBotForwardSegment {
+  type: 'forward';
+  data: { id: string; content?: OneBotMessageEvent[] };
+}
+
 export type OneBotMessageSegment =
   | OneBotTextSegment
   | OneBotFaceSegment
@@ -92,7 +97,8 @@ export type OneBotMessageSegment =
   | OneBotRecordSegment
   | OneBotVideoSegment
   | OneBotFileSegment
-  | OneBotJsonSegment;
+  | OneBotJsonSegment
+  | OneBotForwardSegment;
 
 // --- Sender ---
 

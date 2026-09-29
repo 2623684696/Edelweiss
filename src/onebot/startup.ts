@@ -168,6 +168,9 @@ export const startOneBot = async (deps: OneBotStartupDeps): Promise<OneBotStartu
         onMediaClassificationFailure: err => deps.logger.withError(err)
           .withFields({ chatId, messageId: String(msg.message_id) })
           .warn('OneBot replay media classification failed; keeping attachment as sticker'),
+        onForwardFetchFailure: err => deps.logger.withError(err)
+          .withFields({ chatId, messageId: String(msg.message_id) })
+          .warn('OneBot replay merged forward unavailable; keeping placeholder'),
       },
     ))))
       .map(deps.redactBlockedMessage);

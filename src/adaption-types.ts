@@ -40,6 +40,7 @@ export type ContentNode =
   | { type: 'mention'; userId?: string; children: ContentNode[] }
   | { type: 'custom_emoji'; customEmojiId: string; children: ContentNode[]; altText?: string; altTextError?: string; stickerSetName?: string }
   | { type: 'face'; faceId: string; text: string }  // OneBot face
+  | { type: 'forward'; messages: { senderId?: string; senderName: string; content: ContentNode[] }[] }
   | { type: 'rich'; text: string }; // for unsupported content, preserve original encoding as text
 
 export interface CanonicalForwardInfo {
