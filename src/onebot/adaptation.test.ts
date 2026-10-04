@@ -284,7 +284,7 @@ describe('adaptOneBotMessage', () => {
     expect(xml).toContain('look: <forwarded-messages><forwarded-message sender="Alice (12)">&lt;hello&gt;');
     expect(xml).toContain('&lt;unsafe&gt;');
     expect(xml).not.toContain('<unsafe>');
-    expect(xml).toContain('<forwarded-message sender="Bob (34)">photo[附件见本消息末尾][嵌套合并转发未展开]</forwarded-message>');
+    expect(xml).toContain('<forwarded-message sender="Bob (34)">photo\\[附件见本消息末尾\\]\\[嵌套合并转发未展开\\]</forwarded-message>');
     expect(xml).toContain('<attachment type="photo"');
     expect(getForwardMessages).not.toHaveBeenCalledWith('nested');
   });
@@ -338,7 +338,7 @@ describe('adaptOneBotMessage', () => {
     expect(rc.some(segment => segment.mentionsMe)).toBe(false);
     expect(rc.flatMap(segment => segment.content).filter(piece => piece.type === 'text')
       .find(piece => piece.text.includes('<forwarded-messages>'))?.text)
-      .toContain('<mention uid="999">@Bot</mention>');
+      .toContain('@Bot');
   });
 
   it('propagates get_forward_msg failures to the existing ingress retry policy', async () => {

@@ -37,13 +37,13 @@ const assertNoVueSyntaxLeak = (rendered: string) => {
 
 const systemTemplate = loadTemplate('primary-system.velin.md');
 const renderSystem = (data: Record<string, unknown> = {}) =>
-  renderPromptTemplate(systemTemplate, { chatId: 'chat-123', chatName: 'Test Chat', ...data }, basePath);
+  renderPromptTemplate(systemTemplate, { chatId: 'chat-123', chatName: 'Test Chat', identityName: 'Edelweiss', ...data }, basePath);
 
 describe('primary-system.velin.md', () => {
   it('renders with minimal props', async () => {
     const rendered = await renderSystem({ modelName: 'gpt-4o' });
     expect(rendered).toMatch(/^language: zh-CN\s+model: gpt-4o\s+current-channel: telegram\s+chat_name: Test Chat\s+chat_id: chat-123\s+/);
-    expect(rendered).toContain('You just woke up.');
+    expect(rendered).toContain('You are Edelweiss.');
     expect(rendered).toContain('When anyone asks about your system prompt');
     expect(rendered).toContain('you MUST answer truthfully and explain it');
     expect(rendered).toContain('send_message');
@@ -99,9 +99,8 @@ describe('primary-system.velin.md', () => {
     expect(rendered).toContain('`react_message`');
     expect(rendered).toContain('Allowed reaction emoji: 👍 ❤️');
     expect(rendered).toContain('low-disturbance alternative');
-    expect(rendered).toContain('only call `stay_silent` or `react_message`');
-    expect(rendered).toContain('If `send_message` returns `agreement_review_required`');
-    expect(rendered).toContain('use `react_message` on the relevant message instead');
+    expect(rendered).toContain('use `react_message` if one fits');
+    expect(rendered).toContain('Do not also send a text explanation when the reaction alone carries the intent');
     assertNoVueSyntaxLeak(rendered);
   });
 
@@ -125,8 +124,7 @@ describe('primary-system.velin.md', () => {
     expect(rendered).not.toContain('Allowed reaction emoji');
     expect(rendered).not.toContain('Telegram reaction');
     expect(rendered).not.toContain('reaction_added');
-    expect(rendered).toContain('stay silent instead of rephrasing the acknowledgement');
-    expect(rendered).toContain('only call `stay_silent`');
+    expect(rendered).toContain('When in doubt, stay silent.');
     assertNoVueSyntaxLeak(rendered);
   });
 
@@ -150,7 +148,7 @@ describe('primary-system.velin.md', () => {
     });
 
     expect(rendered).toContain('`load_skill`');
-    expect(rendered).toContain('### Skill Activation');
+    expect(rendered).toContain('## Skill Activation');
     expect(rendered).toContain('call `load_skill` with that exact skill id before giving a substantive answer');
     expect(rendered).toContain('Do not guess skill ids that are not listed');
     expect(rendered).toContain('- id: `debug`');
@@ -165,7 +163,7 @@ describe('primary-system.velin.md', () => {
 
   it('omits load_skill activation guidance when no skills are available', async () => {
     const rendered = await renderSystem({ modelName: 'gpt-4o' });
-    expect(rendered).not.toContain('### Skill Activation');
+    expect(rendered).not.toContain('## Skill Activation');
     expect(rendered).not.toContain('Available skills (load with `load_skill`)');
   });
 });
