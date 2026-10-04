@@ -4,8 +4,8 @@ import { computed, effect, signal } from 'alien-signals';
 import { runCompaction } from './compaction';
 import { composeContext, findWorkingWindowCursor, wasToolLoopInterrupted } from './context';
 import { createMainTurnFeatures } from './features/main';
-import { renderSubagentSystemPrompt } from './prompt';
-import { createRunner } from './runner';
+import { renderSubagentSystemPrompt, renderSystemPrompt } from './prompt';
+import { createRunner, toToolSchema } from './runner';
 import { createDriverScheduler } from './scheduler';
 import { loadSkillsFromFolder } from './skills';
 import { createAgentMailbox } from './subagents/mailbox';
@@ -16,6 +16,7 @@ import type { CahciuaTool, SendMessageAttachment, SendMessageTurnFlags } from '.
 import { TurnPreparationSkipped } from './turn-features';
 import type { DriverFeature } from './turn-features';
 import { createTurnPhases, runTurn } from './turn-phases';
+import { buildMainCapabilities, buildMainSystemPromptParams } from './turn-prefix';
 import { createDefaultTurnCapabilities, createSchedulerState } from './turn-state';
 import type { ChatScope, TurnState } from './turn-state';
 import type { CompactionSessionMeta, DriverConfig, ManualCompactionResult, PlatformAdapter, TurnResponseV2 } from './types';
@@ -417,6 +418,30 @@ export const createDriver = (config: DriverConfig, deps: {
         if (newCursorMs <= oldCursorMs || (rcWindow.length === 0 && trsWindow.length === 0))
           return { status: 'skipped', reason: 'within_working_window' };
 
+        // Reuse the main-turn system prompt + tools so the compaction call shares
+        // the prompt-cache prefix (tools → system → messages). Tool calls are
+        // forbidden at the API boundary via tool_choice: none.
+        const reactionEmojis = deps.getAllowedReactionEmojis?.(chatId) ?? [];
+        const capabilities = buildMainCapabilities(chatConfig, reactionEmojis);
+        const system = await renderSystemPrompt(buildMainSystemPromptParams({
+          chatId,
+          chatName: await getChatName(),
+          chatConfig,
+          allSkills,
+          reactionEmojis,
+          capabilities,
+        }));
+        const tools = [
+          ...createCapabilityTools(capabilities, reactionEmojis, { wasLengthLimited: false, inFocusMode: false }),
+          ...(chatConfig.subagents.enabled ? subagentManager.mainTools() : []),
+        ].map(toToolSchema);
+
+        if (compactEndpoint.model !== chatConfig.primaryModel.model
+          || compactEndpoint.apiBaseUrl !== chatConfig.primaryModel.apiBaseUrl) {
+          log.withFields({ chatId, compactModel: compactEndpoint.model, primaryModel: chatConfig.primaryModel.model })
+            .log('Compaction model differs from primary; main prompt prefix will not hit the prompt cache');
+        }
+
         log.withFields({
           chatId,
           manual,
@@ -435,6 +460,8 @@ export const createDriver = (config: DriverConfig, deps: {
           timeoutSec: compactEndpoint.timeoutSec,
           extraBody: compactEndpoint.extraBody,
           chatId,
+          system,
+          tools,
           rcWindow,
           trsWindow,
           existingSummary: sum,

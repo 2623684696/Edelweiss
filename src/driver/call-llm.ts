@@ -85,7 +85,7 @@ export const callLlm = async (
   entries: ConversationEntry[],
   system: string,
   tools?: ToolSchema[],
-  options?: { log: Logger; label: string; dumpId?: string; maxImagesAllowed?: number },
+  options?: { log: Logger; label: string; dumpId?: string; maxImagesAllowed?: number; toolChoice?: 'none' },
 ): Promise<LlmCallResult> => {
   const apiFormat: ProviderFormat = config.apiFormat ?? 'openai-chat';
   const log = options?.log;
@@ -103,6 +103,7 @@ export const callLlm = async (
     const response = await streamingResponses({
       baseURL: config.apiBaseUrl, apiKey: config.apiKey, model: config.model,
       forceToolCall: config.forceToolCall,
+      toolChoice: options?.toolChoice,
       input, instructions: system, ...(wireTools ? { tools: wireTools } : {}),
       extraBody: config.extraBody,
       log: log!, label, timeoutSec: config.timeoutSec, signal: config.signal,
@@ -160,6 +161,7 @@ export const callLlm = async (
     const response = await streamingMessages({
       baseURL: config.apiBaseUrl, apiKey: config.apiKey, model: config.model,
       forceToolCall: config.forceToolCall,
+      toolChoice: options?.toolChoice,
       system: cachedSystem, messages, ...(wireTools ? { tools: wireTools } : {}),
       extraBody: config.extraBody,
       log: log!, label, timeoutSec: config.timeoutSec, signal: config.signal,
@@ -185,6 +187,7 @@ export const callLlm = async (
   const response = await streamingChat({
     baseURL: config.apiBaseUrl, apiKey: config.apiKey, model: config.model,
     forceToolCall: config.forceToolCall,
+    toolChoice: options?.toolChoice,
     messages: chatMessages, system, ...(wireTools ? { tools: wireTools } : {}),
     extraBody: config.extraBody,
     log: log!, label, timeoutSec: config.timeoutSec, signal: config.signal,

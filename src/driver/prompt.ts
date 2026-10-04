@@ -12,7 +12,6 @@ const basePath = resolve(__dirname, '../../package.json');
 const systemPromptTemplate = readFileSync(resolve(__dirname, '../../prompts/primary-system.velin.md'), 'utf-8');
 const subagentSystemTemplate = readFileSync(resolve(__dirname, '../../prompts/subagent-system.velin.md'), 'utf-8');
 const lateBindingTemplate = readFileSync(resolve(__dirname, '../../prompts/primary-late-binding.velin.md'), 'utf-8');
-const compactionSystemTemplate = readFileSync(resolve(__dirname, '../../prompts/compaction-system.velin.md'), 'utf-8');
 const compactionUserTemplate = readFileSync(resolve(__dirname, '../../prompts/compaction-late-binding.velin.md'), 'utf-8');
 
 export interface AvailableSkillPromptInfo {
@@ -22,7 +21,7 @@ export interface AvailableSkillPromptInfo {
   usage?: string;
 }
 
-export const renderSystemPrompt = async (params: {
+export interface SystemPromptParams {
   chatId: string;
   chatName: string;
   identityName: string;
@@ -37,7 +36,9 @@ export const renderSystemPrompt = async (params: {
   availableReactionEmojis?: string[];
   availableSkills?: AvailableSkillPromptInfo[];
   forceToolCall?: boolean | 'api' | 'local';
-}) => {
+}
+
+export const renderSystemPrompt = async (params: SystemPromptParams) => {
   return await renderPromptTemplate(systemPromptTemplate, {
     chatId: params.chatId.replace(/\s+/g, ' ').trim(),
     chatName: params.chatName.replace(/\s+/g, ' ').trim(),
@@ -81,11 +82,6 @@ export const renderLateBindingPrompt = async (params: {
     ...params,
     forceToolCall: params.forceToolCall !== false && params.forceToolCall !== undefined,
   }, basePath);
-  return cleanVelinOutput(rendered);
-};
-
-export const renderCompactionSystemPrompt = async () => {
-  const { rendered } = await renderMarkdownString(compactionSystemTemplate, {}, basePath);
   return cleanVelinOutput(rendered);
 };
 

@@ -56,6 +56,8 @@ export interface StreamingChatParams {
   system?: string;
   tools?: ToolSchema[];
   forceToolCall?: boolean | 'api' | 'local';
+  /** Overrides forceToolCall. 'none' forbids tool calls (used by compaction). */
+  toolChoice?: 'none';
   timeoutSec?: number;
   extraBody?: Record<string, unknown>;
   signal?: AbortSignal;
@@ -93,7 +95,11 @@ export const streamingChat = async (params: StreamingChatParams): Promise<Stream
         ...params.messages,
       ],
       ...(params.tools && params.tools.length > 0 ? { tools: params.tools } : {}),
-      ...(params.forceToolCall === true || params.forceToolCall === 'api' ? { tool_choice: 'required' } : {}),
+      ...(params.toolChoice === 'none'
+        ? { tool_choice: 'none' }
+        : params.forceToolCall === true || params.forceToolCall === 'api'
+          ? { tool_choice: 'required' }
+          : {}),
       ...(params.extraBody ?? {}),
       stream: true,
       stream_options: { include_usage: true },

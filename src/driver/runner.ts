@@ -160,7 +160,7 @@ export interface ModelStepOutput {
   requestedAtMs: number;
 }
 
-const toToolSchema = (t: CahciuaTool): ToolSchema => ({
+export const toToolSchema = (t: CahciuaTool): ToolSchema => ({
   name: t.function.name,
   parameters: t.function.parameters,
   ...(t.function.description ? { description: t.function.description } : {}),

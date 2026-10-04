@@ -273,21 +273,6 @@ describe('primary-late-binding.velin.md', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// compaction-system.velin.md
-// ═══════════════════════════════════════════════════════════════
-
-const compactionSystemTemplate = loadTemplate('compaction-system.velin.md');
-
-describe('compaction-system.velin.md', () => {
-  it('renders without props', async () => {
-    const { rendered } = await renderMarkdownString(compactionSystemTemplate, {}, basePath);
-    expect(rendered.length).toBeGreaterThan(0);
-    expect(rendered).toContain('myself');
-    assertNoVueSyntaxLeak(rendered);
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════
 // compaction-late-binding.velin.md
 // ═══════════════════════════════════════════════════════════════
 
@@ -298,6 +283,14 @@ describe('compaction-late-binding.velin.md', () => {
     const { rendered } = await renderMarkdownString(compactionLateBindingTemplate, {}, basePath);
     expect(rendered.length).toBeGreaterThan(0);
     assertNoVueSyntaxLeak(rendered);
+  });
+
+  it('carries the compressor role override and rules merged from the system prompt', async () => {
+    const { rendered } = await renderMarkdownString(compactionLateBindingTemplate, {}, basePath);
+    expect(rendered).toContain('ROLE OVERRIDE');
+    expect(rendered).toContain('myself');
+    expect(rendered).toContain('(ref: msg#ID)');
+    expect(rendered).toContain('## Tool Call Activity');
   });
 });
 

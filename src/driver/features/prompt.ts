@@ -1,33 +1,21 @@
 import { injectLateBindingPrompt, wasToolLoopInterrupted } from '../context';
 import { renderLateBindingPrompt, renderSystemPrompt } from '../prompt';
 import type { DriverFeature } from '../turn-features';
+import { buildMainSystemPromptParams } from '../turn-prefix';
 import type { MainTurnFeatureDeps } from './types';
 
 export const createPromptFeature = (deps: MainTurnFeatureDeps): DriverFeature => ({
   name: 'prompt',
   preparePrompt: async ctx => {
     const { turn } = ctx;
-    turn.system = await renderSystemPrompt({
+    turn.system = await renderSystemPrompt(buildMainSystemPromptParams({
       chatId: deps.chatId,
       chatName: await deps.getChatName(),
-      identityName: deps.chatConfig.identityName,
-      currentChannel: deps.chatConfig.platform,
-      modelName: deps.chatConfig.primaryModel.model,
-      forceToolCall: deps.chatConfig.primaryModel.forceToolCall,
-      systemFiles: deps.chatConfig.systemFiles,
-      hasLoadSkillTool: deps.allSkills.size > 0,
-      hasSubagentTools: deps.chatConfig.subagents.enabled,
-      hasReactTool: deps.chatConfig.platform === 'telegram' && turn.reactionEmojis.length > 0,
-      hasAskForImageTool: Boolean(deps.chatConfig.imageToText.model && turn.capabilities.canAskForImage),
-      availableReactionEmojis: turn.reactionEmojis,
-      availableSkills: [...deps.allSkills.values()]
-        .map(s => ({
-          id: s.name,
-          ...(s.format === 'custom-v2' && s.title ? { title: s.title } : {}),
-          description: s.description,
-          usage: s.usage,
-        })),
-    });
+      chatConfig: deps.chatConfig,
+      allSkills: deps.allSkills,
+      reactionEmojis: turn.reactionEmojis,
+      capabilities: turn.capabilities,
+    }));
 
     const isInterrupted = wasToolLoopInterrupted(turn.trs);
     const isMentioned = turn.rcAtStart.some(seg =>

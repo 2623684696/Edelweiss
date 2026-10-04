@@ -30,6 +30,11 @@ vi.mock('./runner', () => ({
     callModelStep: mocks.callModelStep,
     executeToolStep: mocks.executeToolStep,
   })),
+  toToolSchema: (t: { function: { name: string; parameters: Record<string, unknown>; description?: string } }) => ({
+    name: t.function.name,
+    parameters: t.function.parameters,
+    ...(t.function.description ? { description: t.function.description } : {}),
+  }),
   pruneLengthLimitFailures: (entries: unknown[], pendingPrune: boolean) => ({ pruned: entries, pendingPrune }),
 }));
 
@@ -373,7 +378,14 @@ describe('createDriver debounce scheduling', () => {
         oldCursorMs: 0,
         newCursorMs: 100,
         rcWindow: [{ receivedAtMs: 50, content: [{ type: 'text', text: 'x'.repeat(20_000) }] }],
+        system: 'system',
       }));
+      // Reuses the main-turn prompt prefix: tools are sent alongside the system prompt.
+      const compactionArgs = mocks.runCompaction.mock.calls[0]![0] as { tools?: Array<{ name: string }> };
+      expect(Array.isArray(compactionArgs.tools)).toBe(true);
+      expect(compactionArgs.tools!.length).toBeGreaterThan(0);
+      expect(compactionArgs.tools!.map(t => t.name)).toContain('send_message');
+      expect(mocks.renderSystemPrompt).toHaveBeenCalled();
       expect(persistCompaction).toHaveBeenCalledOnce();
     } finally {
       driver.stop();

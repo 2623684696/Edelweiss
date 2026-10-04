@@ -26,6 +26,8 @@ export interface StreamingMessagesParams {
   messages: MessagesMessage[];
   tools?: AnthropicTool[];
   forceToolCall?: boolean | 'api' | 'local';
+  /** Overrides forceToolCall. 'none' forbids tool calls (used by compaction). */
+  toolChoice?: 'none';
   maxTokens?: number;
   timeoutSec?: number;
   extraBody?: Record<string, unknown>;
@@ -87,7 +89,11 @@ export const streamingMessages = async (params: StreamingMessagesParams): Promis
       ...(params.system ? { system: params.system } : {}),
       messages: params.messages,
       ...(params.tools && params.tools.length > 0 ? { tools: params.tools } : {}),
-      ...(params.forceToolCall === true || params.forceToolCall === 'api' ? { tool_choice: { type: 'any' } } : {}),
+      ...(params.toolChoice === 'none'
+        ? { tool_choice: { type: 'none' } }
+        : params.forceToolCall === true || params.forceToolCall === 'api'
+          ? { tool_choice: { type: 'any' } }
+          : {}),
       ...(params.extraBody ?? {}),
       stream: true,
     });

@@ -1,8 +1,8 @@
 import type { Logger } from '@guiiai/logg';
 
-import { callLlm, type LlmCallConfig } from './call-llm';
+import { callLlm, type LlmCallConfig, type ToolSchema } from './call-llm';
 import { composeContext } from './context';
-import { renderCompactionSystemPrompt, renderCompactionUserInstruction } from './prompt';
+import { renderCompactionUserInstruction } from './prompt';
 import type { CompactionSessionMeta, TurnResponseV2 } from './types';
 import type { RenderedContext } from '../rendering/types';
 import type {
@@ -13,6 +13,10 @@ import type {
 
 export interface CompactionParams extends LlmCallConfig {
   chatId: string;
+  /** Main-turn system prompt reused for prompt-cache prefix continuity. */
+  system: string;
+  /** Main-turn tool schema, sent so the cached prefix matches (calls forbidden via tool_choice: none). */
+  tools?: ToolSchema[];
   rcWindow: RenderedContext;
   trsWindow: TurnResponseV2[];
   existingSummary?: string;
@@ -38,10 +42,7 @@ const extractAssistantText = (entries: ConversationEntry[]): string => {
 };
 
 export const runCompaction = async (params: CompactionParams): Promise<CompactionSessionMeta> => {
-  const [compactSystemPrompt, compactUserInstruction] = await Promise.all([
-    renderCompactionSystemPrompt(),
-    renderCompactionUserInstruction(),
-  ]);
+  const compactUserInstruction = await renderCompactionUserInstruction();
 
   const ctx = composeContext(
     params.rcWindow, params.trsWindow, COMPACT_MAX_TOKENS,
@@ -58,11 +59,12 @@ export const runCompaction = async (params: CompactionParams): Promise<Compactio
   let outputTokens = 0;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    const result = await callLlm(params, entries, compactSystemPrompt, undefined, {
+    const result = await callLlm(params, entries, params.system, params.tools, {
       log: params.log,
       label: `compact:${params.chatId}`,
       dumpId: `${params.chatId}.compact`,
       maxImagesAllowed: params.maxImagesAllowed,
+      toolChoice: 'none',
     });
     summary = extractAssistantText(result.entries);
     inputTokens = result.usage.inputTokens;

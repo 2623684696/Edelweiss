@@ -136,7 +136,7 @@ src/
 │   ├── call-llm.ts         # Unified LLM call dispatcher (openai-chat / responses / anthropic-messages)
 │   ├── call-llm.test.ts    # LLM dispatcher mapping tests, including OpenAI-compatible cache usage fields
 │   ├── runner.ts           # LLM step executor: triple-provider SSE streaming + lane-based tool scheduling (prelude/read/write/message/serial)
-│   ├── compaction.ts       # Context compaction: LLM-based conversation summarization (triple-provider)
+│   ├── compaction.ts       # Context compaction: LLM-based conversation summarization (triple-provider); reuses the main-turn system prompt + tools with tool_choice: none for prompt-cache prefix reuse
 │   ├── scheduler.ts        # Driver scheduler controller: reply eligibility, debounce/typing timers, active-run interruption, begin/settle state
 │   ├── scheduler.test.ts   # Scheduler state-operation tests
 │   ├── turn-features.ts    # DriverFeature hook interface + fixed prepare-phase runner
@@ -149,6 +149,7 @@ src/
 │   │   ├── main.ts         # createMainTurnFeatures(): fixed main feature ordering
 │   │   └── *.ts            # One factory per feature: context, interruption, reaction, capability, tools, skill, prompt, mailbox, persistence, cleanup, etc.
 │   ├── prompt.ts           # Prompt rendering — loads all velin templates from prompts/; main prompt starts with sanitized chat_name/chat_id metadata
+│   ├── turn-prefix.ts      # Shared builders for the main-turn system-prompt params + capabilities, so compaction reuses an identical cached prefix
 │   ├── skills.ts           # Skill loader: reads markdown files/directories from skills/ folder → SkillInfo map
 │   ├── web-fetch/          # Hardcoded host substitution → Telegram Instant View → Jina fallback
 │   │   ├── index.ts        # Composite routing and x.com/twitter.com mirror substitution
@@ -277,8 +278,7 @@ Top-level directories:
   - `primary-late-binding.velin.md` — context-aware injection (mention/reply state, recent send_message human-likeness feedback, background task status)
   - `IDENTITY.velin.md` — bot identity / personality definition (loaded by prompt renderer); **bot persona is hardcoded here**
   - `CURIOSITY.md` — plain-markdown system file for curiosity-driven silent lookup and high-threshold natural interjections
-  - `compaction-system.velin.md` — compaction LLM system prompt
-  - `compaction-late-binding.velin.md` — compaction LLM user instruction (output format)
+  - `compaction-late-binding.velin.md` — compaction LLM instruction appended after the reused main-turn context; merges the compressor role override, output format, and rules (sent as the final user message, with tool calls disabled via `tool_choice: none`)
   - `image-to-text-system.velin.md` — blocking image description prompt used before events enter the pipeline
   - `animation-to-text-system.velin.md` — blocking GIF/animation description prompt (multi-frame)
   - `sticker-animation-to-text-system.velin.md` — blocking animated sticker description prompt (multi-frame)
@@ -659,6 +659,8 @@ Manual `/compact` commands on Telegram and OneBot use the same per-chat compacti
 | created_at | INTEGER NOT NULL | millisecond timestamp |
 
 **Compaction is NOT a turn**: compaction has its own dedicated table, not stored in `turn_responses`. It produces a summary (pure text with structured sections), not a provider-format response.
+
+**Prompt-cache prefix reuse**: `runCompaction()` reuses the same system prompt and tool schema as a main turn (`src/driver/turn-prefix.ts` rebuilds the main-turn params), appending the `compaction-late-binding` instruction as the final user message. Tool calls are forbidden at the API boundary via `tool_choice: none` (supersedes `forceToolCall` in all three provider streamers). Providers that cache in `tools → system → messages` order (Anthropic, OpenAI) can then hit the cached prefix instead of re-billing the whole window. This only saves cost when the compaction endpoint matches the primary model (`compaction.model` unset or pointing at the same model/`apiBaseUrl`); a differing compaction model logs a note and gains nothing. The trade-off is that the chat persona is present in the system prompt, so the trailing instruction explicitly overrides the role to "conversation compressor".
 
 **Token estimation**: Context size is estimated using a `CHARS_PER_TOKEN = 2` heuristic (not an actual tokenizer). Summary size is excluded from the compaction trigger check to prevent the summary from growing until it fills the budget (which would degrade compaction into a sliding window). `findWorkingWindowCursor` counts both RC segments and TRs when determining the cursor position.
 
