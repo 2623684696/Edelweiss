@@ -194,18 +194,34 @@ describe('loadSkillsFromFolder', () => {
       expect(loadSkillsFromFolder(dir).has('bad-desc')).toBe(false);
     });
 
-    it('front-matter parse: rejects when description is empty string', () => {
+    it.each([
+      { metadata: '', body: '# Wake Home Server\n\nWake on explicit request.', description: 'Wake Home Server' },
+      { metadata: 'description: ""\n', body: '# Wake Home Server\n\nWake on explicit request.', description: 'Wake Home Server' },
+      { metadata: 'description: "   "\n', body: 'Wake on explicit request.', description: 'Wake on explicit request.' },
+      { metadata: 'description:\n', body: 'Wake on explicit request.', description: 'Wake on explicit request.' },
+      { metadata: '', body: 'Wake on explicit request. '.repeat(10), description: 'Wake on explicit request. '.repeat(10).trim().slice(0, 120) },
+      { metadata: '', body: '', description: 'Good Name' },
+    ])('falls back for missing or blank descriptions: $metadata / $description', ({ metadata, body, description }) => {
       const dir = makeSkillsDir();
-      writeFileSync(join(dir, 'empty-desc.md'), [
-        '---',
-        'name: Good Name',
-        'description: ""',
-        '---',
-        '',
-        'Body',
-      ].join('\n'));
+      const content = `---\nname: Good Name\n${metadata}---\n\n${body}`;
+      writeFileSync(join(dir, 'fallback.md'), content);
+      mkdirSync(join(dir, 'wol-server'));
+      writeFileSync(join(dir, 'wol-server', 'SKILL.md'), content);
 
-      expect(loadSkillsFromFolder(dir).has('empty-desc')).toBe(false);
+      const skills = loadSkillsFromFolder(dir);
+      expect(skills.get('fallback')).toMatchObject({
+        name: 'fallback',
+        title: 'Good Name',
+        description,
+        format: 'custom-v2',
+        content: body,
+      });
+      expect(skills.get('wol-server')).toMatchObject({
+        name: 'wol-server',
+        description,
+        format: 'anthropic',
+        content: body,
+      });
     });
 
     it('front-matter parse: rejects when usage is non-string', () => {

@@ -52,16 +52,19 @@ const parseFrontMatterSkill = (content: string): ParsedFrontMatter | null => {
 
   const data = rawData as Record<string, unknown>;
   if (typeof data.name !== 'string' || data.name.trim() === '') return null;
-  if (typeof data.description !== 'string' || data.description.trim() === '') return null;
+  if (data.description != null && typeof data.description !== 'string') return null;
   if (data.usage != null && typeof data.usage !== 'string') return null;
+
+  const body = match[2]!.trimStart();
+  const description = typeof data.description === 'string' ? data.description.trim() : '';
 
   return {
     data: {
       name: data.name.trim(),
-      description: data.description.trim(),
+      description: description || extractTitle(body, body.trim().slice(0, 120) || data.name.trim()),
       ...(typeof data.usage === 'string' && data.usage.trim() !== '' ? { usage: data.usage.trim() } : {}),
     },
-    body: match[2]!.trimStart(),
+    body,
   };
 };
 
