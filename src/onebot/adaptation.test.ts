@@ -78,6 +78,67 @@ describe('adaptOneBotSender', () => {
 });
 
 describe('adaptOneBotMessage', () => {
+  const mentionEvent = (): OneBotMessageEvent => ({
+    post_type: 'message',
+    message_type: 'group',
+    time: 1,
+    self_id: 999,
+    user_id: 42,
+    group_id: 100,
+    message_id: 7,
+    message: [{ type: 'at', data: { qq: '123' } }],
+    raw_message: '',
+    sender: { user_id: 42, nickname: 'sender' },
+  });
+
+  it('keeps live individual mention lookup failures fail-closed', async () => {
+    const api = {
+      getFriendRemark: vi.fn().mockResolvedValue(undefined),
+      getGroupMemberInfo: vi.fn().mockRejectedValue(new Error('OneBot API error: retcode=1200')),
+    } as unknown as OneBotApiClient;
+
+    await expect(adaptOneBotMessage(api, mentionEvent(), { receivedAtMs: 1000, utcOffsetMin: 480 }))
+      .rejects.toThrow('retcode=1200');
+  });
+
+  it('renders all-member mentions without an individual member lookup', async () => {
+    const getGroupMemberInfo = vi.fn().mockRejectedValue(new Error('invalid user ID'));
+    const api = {
+      getFriendRemark: vi.fn().mockResolvedValue(undefined),
+      getGroupMemberInfo,
+    } as unknown as OneBotApiClient;
+    const event = mentionEvent();
+    event.message = [{ type: 'at', data: { qq: 'all' } }];
+
+    const adapted = await adaptOneBotMessage(api, event, { receivedAtMs: 1000, utcOffsetMin: 480 });
+
+    expect(adapted.content).toEqual([{ type: 'text', text: '@全体成员' }]);
+    expect(getGroupMemberInfo).not.toHaveBeenCalled();
+  });
+
+  it('preserves historical mention IDs inside merged forwards when member lookup fails', async () => {
+    const error = new Error('OneBot API error: retcode=1200');
+    const api = {
+      getFriendRemark: vi.fn().mockResolvedValue(undefined),
+      getGroupMemberInfo: vi.fn().mockRejectedValue(error),
+    } as unknown as OneBotApiClient;
+    const event = mentionEvent();
+    event.message = [{ type: 'forward', data: { id: 'forward-id', content: [mentionEvent()] } }];
+    const onMentionLookupFailure = vi.fn();
+
+    const adapted = await adaptOneBotMessage(api, event, { receivedAtMs: 1000, utcOffsetMin: 480 }, {
+      onMentionLookupFailure,
+    });
+
+    expect(onMentionLookupFailure).toHaveBeenCalledWith(error, '123');
+    expect(adapted.content).toMatchObject([{
+      type: 'forward',
+      messages: [{
+        content: [{ type: 'mention', userId: '123', children: [{ type: 'text', text: '@123' }] }],
+      }],
+    }]);
+  });
+
   it('resolves the sender remark through the OneBot friend list API', async () => {
     const getFriendRemark = vi.fn(async () => '好友列表备注');
     const api = { getFriendRemark } as unknown as OneBotApiClient;

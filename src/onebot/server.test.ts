@@ -195,6 +195,27 @@ describe('createOneBotServer', () => {
     }
   });
 
+  it('includes the API action in failed response errors without exposing payloads', async () => {
+    const server = createOneBotServer({ enabled: true, host: '127.0.0.1', port: 0, accessToken: '' }, {
+      onEvent: () => {}, log: useLogger('onebot-server-test'),
+    });
+    await server.start();
+    try {
+      const port = typeof server.address === 'object' ? server.address?.port : undefined;
+      const client = await connect(port!);
+      client.once('message', data => {
+        const payload = JSON.parse(data.toString()) as { echo: string };
+        client.send(JSON.stringify({
+          status: 'failed', retcode: 1200, echo: payload.echo, data: null, message: 'private response details',
+        }));
+      });
+      await expect(server.api!.getGroupMemberInfo('100', '123'))
+        .rejects.toThrow('OneBot API error: action=get_group_member_info, retcode=1200');
+    } finally {
+      await server.stop();
+    }
+  });
+
   it('stops while a WebSocket client is still connected', async () => {
     const config: OneBotConfig = {
       enabled: true,

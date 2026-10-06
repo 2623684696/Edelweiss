@@ -29,6 +29,7 @@ export interface OneBotIngressMeta {
 export interface OneBotAdaptationOptions {
   onMediaClassificationFailure?: (err: unknown) => void;
   onForwardFetchFailure?: (err: unknown) => void;
+  onMentionLookupFailure?: (err: unknown, userId: string) => void;
 }
 
 export const captureOneBotIngressMeta = (): OneBotIngressMeta => ({
@@ -117,10 +118,18 @@ const adaptSegment = async (
     return { type: 'face', faceId: seg.data.id, text: desc };
   }
 
-  case 'at':
-    // napcat 上报的 mention 事件不带 name，所以需要自己拉
-    const userMentioned = await api.getGroupMemberInfo(chatId, seg.data.qq);
-    return { type: 'mention', userId: String(seg.data.qq), children: [{ type: 'text', text: `@${userMentioned.displayName}` }] };
+  case 'at': {
+    const userId = String(seg.data.qq);
+    if (userId === 'all') return { type: 'text', text: '@全体成员' };
+    try {
+      const userMentioned = await api.getGroupMemberInfo(chatId, userId);
+      return { type: 'mention', userId, children: [{ type: 'text', text: `@${userMentioned.displayName}` }] };
+    } catch (err) {
+      if (!options.onMentionLookupFailure) throw err;
+      options.onMentionLookupFailure(err, userId);
+      return { type: 'mention', userId, children: [{ type: 'text', text: `@${userId}` }] };
+    }
+  }
 
   case 'image': {
     let attType: CanonicalAttachment['type'] = 'photo';

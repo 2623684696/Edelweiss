@@ -22,6 +22,7 @@ import type { CanonicalUser } from '../adaption-types';
 import { httpGetBuffer, redactSecrets, registerHttpSecret } from '../http';
 
 interface PendingCall {
+  action: string;
   resolve: (value: unknown) => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout>;
@@ -174,7 +175,7 @@ const createApiClient = (
           if (msg.status === 'ok') {
             pending.resolve(msg.data);
           } else {
-            pending.reject(new Error(`OneBot API error: retcode=${msg.retcode}`));
+            pending.reject(new Error(`OneBot API error: action=${pending.action}, retcode=${msg.retcode}`));
           }
         }
         return;
@@ -203,7 +204,7 @@ const createApiClient = (
         reject(new Error(`OneBot API request "${action}" timed out after ${REQUEST_TIMEOUT_MS}ms`));
       }, REQUEST_TIMEOUT_MS);
 
-      pendingCalls.set(echo, { resolve: resolve as (v: unknown) => void, reject, timer });
+      pendingCalls.set(echo, { action, resolve: resolve as (v: unknown) => void, reject, timer });
 
       const request: OneBotApiRequest = { action, params, echo };
       ws.send(JSON.stringify(request));

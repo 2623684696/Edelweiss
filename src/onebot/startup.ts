@@ -171,6 +171,9 @@ export const startOneBot = async (deps: OneBotStartupDeps): Promise<OneBotStartu
         onForwardFetchFailure: err => deps.logger.withError(err)
           .withFields({ chatId, messageId: String(msg.message_id) })
           .warn('OneBot replay merged forward unavailable; keeping placeholder'),
+        onMentionLookupFailure: (err, userId) => deps.logger.withError(err)
+          .withFields({ chatId, messageId: String(msg.message_id), userId })
+          .warn('OneBot replay mention lookup failed; keeping numeric user ID'),
       },
     ))))
       .map(deps.redactBlockedMessage);
