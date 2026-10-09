@@ -21,11 +21,11 @@ Key design goals: KV Cache friendly (append-only history, static system prompt, 
 | Layer | Status | Notes |
 |-------|--------|-------|
 | Telegram integration | Done | Bot + userbot, dedup, fileId merge, credential redaction, per-session ingress queue, associated-channel auto-forward detection (`is_automatic_forward` + cached group → linked-channel lookup, prompts active reply), blocking image-to-text (spoiler photos require manual `read_image`), blocking animation-to-text, blocking custom-emoji-to-text, userbot Instant View fetch/photo download with `telegram://instant-view/photo/...` references, send message reactions via bot, receive message reactions via Bot API updates with 500ms add/remove debounce, fetch reaction actors via userbot for count-only updates |
-| OneBot integration | Done | OneBot 11 reverse WebSocket server with graceful shutdown and latest-connection ownership, access-token check, message/notice adaptation, NapCat QQ display names (`get_friend_list` remark → `raw.sendRemarkName` → `raw.sendMemberName` / card → `raw.sendNickName` / nickname), QQ face descriptions, first-level merged-forward reading (inline content or `get_forward_msg`, nested forwards left unexpanded; unavailable historical forwards retain placeholders while live ingress stays fail-closed), image-to-text hydration, reconnect-safe send/download PlatformAdapter, fail-closed channel routing (never falls back to Telegram), entry-time ingress timestamp capture, per-chat ordered ingress queue (bounded-retry-then-drop, fail-closed), shared (chatId, messageId) dedup across live ingress and cold-start history pull, cold-start alt-text backfill (best-effort), self-sent synthetic event injection on send |
+| OneBot integration | Done | OneBot 11 reverse WebSocket server with graceful shutdown and latest-connection ownership, access-token check, message/notice adaptation, NapCat QQ display names (`get_friend_list` remark → `raw.sendRemarkName` → `raw.sendMemberName` / card → `raw.sendNickName` / nickname), QQ face descriptions, image-to-text hydration, reconnect-safe send/download PlatformAdapter, fail-closed channel routing (never falls back to Telegram), entry-time ingress timestamp capture, per-chat ordered ingress queue (bounded-retry-then-drop, fail-closed), shared (chatId, messageId) dedup across live ingress and cold-start history pull, cold-start alt-text backfill (best-effort), self-sent synthetic event injection on send |
 | Adaptation | Done | Types, conversion, dual timestamps, rich text parsing, string IDs, phantom edit filtering, platform-resolved `isMyself` identity |
 | DB / Persistence | Done | events, messages, turn_responses, turn_responses_v2, compactions, image_alt_texts, image_conversations, image_conversation_turns, subagents, subagent_messages, background_tasks, message_reaction_snapshots tables; 32 migrations |
 | Projection | Done | Reducer (message/blocked-message/edit/delete/reaction), MetaReducer (user rename detection), Immer-based immutability |
-| Rendering | Done | `render(IC, RenderParams) → RC`, Markdown message bodies inside XML envelopes, viewport filtering, Telegram `@username` and inferred QQ numeric UID sender labels, thumbnail content pieces, passive reaction event rendering, blocked-message placeholders as deleted messages, inline `<image>` / `<animation>` / `<sticker>` / `<custom-emoji>` alt text rendering, XML-fenced merged-forward messages |
+| Rendering | Done | `render(IC, RenderParams) → RC`, XML serialization, viewport filtering, Telegram `@username` and inferred QQ numeric UID sender labels, thumbnail content pieces, passive reaction event rendering, blocked-message placeholders as deleted messages, inline `<image>` / `<animation>` / `<sticker>` / `<custom-emoji>` alt text rendering |
 | Driver | Done | Triple-provider SSE streaming (OpenAI Chat Completions via xsai + Responses API via fetch + Anthropic Messages API via fetch), unified API codec layer (provider-agnostic IR with format conversion at boundaries), platform-resolved `chat_name` / `chat_id` system-prompt prefix, lane-based tool execution (`enter_focus` prelude, parallel reads, serialized writers/messages, attachment writer barrier), Instant View-first `web_fetch` with X/Twitter mirror substitution and Jina fallback, shared `telegram://` photo reads via `read_image` / `download_file`, persistent image conversations from automatic alt text and `read_image`, main-agent-only multi-turn `ask_for_image` follow-ups with reset-on-context-overflow, Telegram-only `react_message`, semantic follow-up review for `send_message` drafts containing “确实” (preserve substantive content or react), per-step TR persistence (v2 schema), lightweight turn lifecycle (`TurnContext` + `TurnScratch` + internal `DriverFeature` hooks), mid-turn interruption, reasoning sanitization (per-provider format), reactive orchestration (alien-signals), automatic and `/compact`-triggered context compaction (LLM-based summarization with append-only history), subagent delegation with isolated helper context and mailbox communication, skills system (user-facing tool definitions loaded from markdown files), background tasks (long-running shell tasks with lifecycle management), typing-aware debounce scheduling (debounce-scoped Telegram typing presence with online heartbeat / markAsRead / supergroup channel-difference fallback), offline/online reply gating via /offline /online commands, rtk output compaction (optional argv0 rewriting + pipe fallback for bash tool) |
 | Eval harness | Initial | Offline LLM eval suites for comparing prompt variants against fixed IC fixtures, repeated runs, custom TypeScript evaluators, side-effect-free tool traces, and probability summaries |
 
@@ -43,7 +43,7 @@ Key design goals: KV Cache friendly (append-only history, static system prompt, 
 - **Reactivity**: alien-signals — signal/computed/effect graph for Driver orchestration.
 - **Validation**: Valibot — schema validation for config and other runtime inputs where schemas are defined.
 - **Prompts**: @velin-dev/core — LLM prompt templates are velin templates (`.velin.md`) in the `prompts/` directory, rendered via `renderMarkdownString`. Configured system files may also be plain markdown files. Never hardcode prompt strings in source code.
-- **Logging**: @guiiai/logg — structured logger with pretty/JSON output.
+- **Logging**: @guiiai/logg — pretty output by default (including production, preserving multiline logs); opt-in JSON via `EDELWEISS_LOG_FORMAT=json`.
 - **Dependency injection**: tsyringe — factory-registration mode only (no `@injectable`/`@inject` decorators). The composition root in `src/container/` registers each `create*(deps)` factory via `useFactory`; subsystems stay plain closure factories. Requires `reflect-metadata` imported before tsyringe loads (done at `src/index.ts` and `src/container/index.ts`).
 - **Testing**: Vitest.
 - **Linting**: ESLint with `@typescript-eslint`, `@stylistic/eslint-plugin`, `eslint-plugin-import`.
@@ -62,7 +62,7 @@ src/
 ├── adaption-types.ts       # CanonicalIMEvent, CanonicalUser, ContentNode, platform-resolved self identity, etc.
 ├── config/
 │   ├── config.ts           # Unified YAML config loader (Valibot schema)
-│   └── logger.ts           # @guiiai/logg setup (pretty in dev, JSON in prod)
+│   └── logger.ts           # @guiiai/logg setup (pretty by default; production keeps a higher log threshold; JSON is opt-in)
 ├── container/              # Dependency injection composition root (tsyringe, factory-registration mode)
 │   ├── tokens.ts           # Phantom-typed InjectionToken registry (TOKENS) + grouped provider interfaces (ChatPolicy, AltTextPolicy, FeatureSets, DescriptionSemaphores, OneBotHolder)
 │   ├── registrar.ts        # Registrar interface shared by deps/ registration functions
@@ -81,7 +81,7 @@ src/
 │   └── index.ts            # Barrel exports
 ├── rendering/              # Layer 3: IC + RenderParams → RenderedContext (RC)
 │   ├── types.ts            # RenderParams, RenderedContentPiece, RenderedContextSegment, RenderedContext
-│   ├── index.ts            # render(), rcToXml(), Markdown ContentNode bodies in XML message/attachment envelopes
+│   ├── index.ts            # render(), rcToXml(), Markdown ContentNode bodies in XML message/attachment envelopes, first-level merged forwards
 │   └── index.test.ts       # Rendering unit tests
 ├── llm/                    # Provider-agnostic LLM transport layer (SSE streaming + wire types)
 │   ├── types.ts            # ProviderFormat, LlmEndpoint, Usage
@@ -136,7 +136,8 @@ src/
 │   ├── call-llm.ts         # Unified LLM call dispatcher (openai-chat / responses / anthropic-messages)
 │   ├── call-llm.test.ts    # LLM dispatcher mapping tests, including OpenAI-compatible cache usage fields
 │   ├── runner.ts           # LLM step executor: triple-provider SSE streaming + lane-based tool scheduling (prelude/read/write/message/serial)
-│   ├── compaction.ts       # Context compaction: LLM-based conversation summarization (triple-provider); reuses the main-turn system prompt + tools with tool_choice: none for prompt-cache prefix reuse
+│   ├── compaction.ts       # Context compaction: main-turn system/tools prefix reuse, tool_choice: none, compressor role override appended as the final user instruction
+│   ├── compaction.test.ts # Compressor instruction and cached-prefix regression test
 │   ├── scheduler.ts        # Driver scheduler controller: reply eligibility, debounce/typing timers, active-run interruption, begin/settle state
 │   ├── scheduler.test.ts   # Scheduler state-operation tests
 │   ├── turn-features.ts    # DriverFeature hook interface + fixed prepare-phase runner
@@ -149,7 +150,7 @@ src/
 │   │   ├── main.ts         # createMainTurnFeatures(): fixed main feature ordering
 │   │   └── *.ts            # One factory per feature: context, interruption, reaction, capability, tools, skill, prompt, mailbox, persistence, cleanup, etc.
 │   ├── prompt.ts           # Prompt rendering — loads all velin templates from prompts/; main prompt starts with sanitized chat_name/chat_id metadata
-│   ├── turn-prefix.ts      # Shared builders for the main-turn system-prompt params + capabilities, so compaction reuses an identical cached prefix
+│   ├── turn-prefix.ts      # Shared main-turn prompt parameter and capability builders for compaction prefix reuse
 │   ├── skills.ts           # Skill loader: reads markdown files/directories from skills/ folder → SkillInfo map
 │   ├── web-fetch/          # Hardcoded host substitution → Telegram Instant View → Jina fallback
 │   │   ├── index.ts        # Composite routing and x.com/twitter.com mirror substitution
@@ -215,17 +216,19 @@ src/
 │   └── message-dedup.ts     # createMessageDedup: platform-agnostic (chatId, messageId) dedup with bounded LRU (shared by Telegram manager + OneBot ingress/history-pull)
 ├── onebot/
 │   ├── index.ts             # OneBot exports + PlatformAdapter factory for Driver send/download hooks
-│   ├── startup.ts           # OneBot startup: WS server lifecycle, ingress wiring, history pull (shared dedup and expired-forward placeholders), PlatformAdapter registration, post-startup task assembly
-│   ├── startup.test.ts      # Cold-start replay member-lookup failure regression tests
+│   ├── startup.ts           # OneBot startup: WS server lifecycle, ingress wiring, history pull (shared dedup, repeated-cursor/page-limit protection, added-message counts), PlatformAdapter registration, post-startup task assembly
+│   ├── history-cursor.ts    # Cold-start history cursor cycle detection and 1000-page safety limit
+│   ├── history-cursor.test.ts # History cursor stagnation, cycle, and page-limit regression tests
+│   ├── startup.test.ts      # Historical mention lookup failure fallback regression test
 │   ├── post-startup.ts      # OneBot cold-start alt-text backfill: resolves historical image/animation events lacking alt text, persists attachments, replays affected chats (best-effort)
 │   ├── post-startup.test.ts # OneBot alt-text backfill tests
-│   ├── server.ts            # OneBot 11 reverse WebSocket server + echo-correlated API client (including get_forward_msg); cached get_friend_list remarks; captures ingress meta at the WS frame entry and forwards raw events
-│   ├── server.test.ts       # OneBot WebSocket server lifecycle, get_forward_msg request, and connected-client shutdown tests
+│   ├── server.ts            # OneBot 11 reverse WebSocket server + echo-correlated API client; cached get_friend_list remarks; captures ingress meta at the WS frame entry and forwards raw events
+│   ├── server.test.ts       # OneBot WebSocket server lifecycle and connected-client shutdown tests
 │   ├── ingress.ts           # createOneBotIngress: per-chat ordered queue + bounded-retry-then-drop transform (adapt + alt-text); attemptWithBudget policy; shared-dedup gating
 │   ├── ingress.test.ts      # OneBot ingress + attemptWithBudget + dedup tests
 │   ├── types.ts             # OneBot 11 event/API/message-segment types
-│   ├── adaptation.ts        # OneBot message/notice → CanonicalIMEvent conversion; first-level merged-forward adaptation without nested expansion; NapCat QQ name priority (friend-list remark → raw remark → member name/card → nickname); OneBotIngressMeta capture, applies entry-time timestamps
-│   ├── adaptation.test.ts   # OneBot name priority and merged-forward adaptation/rendering tests
+│   ├── adaptation.ts        # OneBot message/notice → CanonicalIMEvent conversion; NapCat QQ name priority (friend-list remark → raw remark → member name/card → nickname); OneBotIngressMeta capture, applies entry-time timestamps
+│   ├── adaptation.test.ts   # OneBot user display-name priority tests
 │   ├── send.ts              # send_message text/attachment rendering into OneBot array segments
 │   ├── send.test.ts         # OneBot send rendering tests, including optional silicon code-block image conversion
 │   ├── image-to-text.ts     # OneBot image download + thumbnail generation via shared image-to-text resolver (fail-closed: throws on failure)
@@ -279,7 +282,7 @@ Top-level directories:
   - `primary-late-binding.velin.md` — context-aware injection (mention/reply state, recent send_message human-likeness feedback, background task status)
   - `IDENTITY.velin.md` — bot identity / personality definition (loaded by prompt renderer); **bot persona is hardcoded here**
   - `CURIOSITY.md` — plain-markdown system file for curiosity-driven silent lookup and high-threshold natural interjections
-  - `compaction-late-binding.velin.md` — compaction LLM instruction appended after the reused main-turn context; merges the compressor role override, output format, and rules (sent as the final user message, with tool calls disabled via `tool_choice: none`)
+  - `compaction-late-binding.velin.md` — compaction role override, rules and output format appended as the final user instruction; main system/tools prefix is reused with tool calls disabled
   - `image-to-text-system.velin.md` — blocking image description prompt used before events enter the pipeline
   - `animation-to-text-system.velin.md` — blocking GIF/animation description prompt (multi-frame)
   - `sticker-animation-to-text-system.velin.md` — blocking animated sticker description prompt (multi-frame)
@@ -382,8 +385,6 @@ The queue is fail-closed. If the head event's transform does not succeed, that c
 **OneBot message dedup + history/live race**: OneBot uses the platform-agnostic `createMessageDedup` (`src/ingress/message-dedup.ts`, the same set-based bounded-LRU dedup Telegram's manager uses) keyed by `(chatId, message_id)`. A **single** dedup instance is created in `startOneBot` and shared by two paths: live ingress (`createOneBotIngress.enqueue`, message events only — notices have no stable per-message identity) and the cold-start `get_group_msg_history` pull. The WS server must be listening — and may already be delivering live frames — before history can be pulled, so a message arriving in that overlap window would otherwise be persisted twice (once live, once from history). Deduping across both paths by reserving `(chatId, message_id)` on first sighting closes the race without buffering or pausing live ingress: whichever path calls `tryAdd` first wins, the other skips. Dedup is consulted *before* the queue (live) and *before* adaptation (history pull).
 
 **OneBot cold-start alt-text backfill** (`src/onebot/post-startup.ts`): images/animations that entered the DB while image-to-text was disabled (or whose live resolution was dropped by the bounded-retry budget) carry no alt text. After `startOneBot` completes its history pull, the orchestrator calls `handle.runPostStartupTasks()` (alongside Telegram's), which walks persisted history per whitelisted OneBot chat, re-resolves uncached image/animation/sticker attachments via `resolveOneBotImageAltText`, persists the mutated attachments back with `updateEventAttachments`, then re-hydrates and replays affected chats. Unlike Telegram (which queries alt text from the cache at render time), OneBot bakes resolved alt text directly into persisted event attachments, so the backfill must persist attachments back. Best-effort per CLAUDE.md: download/LLM failures (frequently expired QQ media) are caught and logged, never fatal.
-
-**OneBot mention lookup policy**: `at.qq === 'all'` renders as `@全体成员` without a member API lookup. Individual mentions retain their canonical user ID; historical replay supplies `onMentionLookupFailure` to log failed member lookups and render `@<userId>` instead of aborting startup, including mentions inside first-level forwards. Live individual-member lookup failures remain fail-closed under the ingress retry budget. API rejection messages include the action and retcode, without dumping request params or response bodies.
 
 ### Dual Telegram Client
 
@@ -611,7 +612,7 @@ Toggles are per-chat (deep-merged with `default` like all other config). They ar
 
 `src/driver/skills.ts` loads user-facing skill/tool definitions from a configurable `skills/` folder. `SkillInfo.name` is the stable load ID and always comes from the file stem or directory name. Supported formats:
 - **CustomSkills**: single `.md` file without front-matter. File stem is the ID, first `#` heading is the catalog description, and the full markdown body is loaded.
-- **CustomSkillsV2**: single `.md` file with YAML front-matter: required `name` (catalog title), optional `description` and `usage`. Missing, null, or blank `description` falls back to the first body `#` heading, then the first 120 characters of the trimmed body, then `name` for an empty body. Non-string descriptions and malformed YAML remain invalid. File stem remains the ID.
+- **CustomSkillsV2**: single `.md` file with YAML front-matter: required `name` (catalog title), optional `description` and `usage`. Missing, null, or blank descriptions fall back to the first body heading, then the first 120 body characters, then the name. Non-string descriptions remain invalid. File stem remains the ID.
 - **AnthropicSkills**: directory whose name is the ID and whose main file is exactly `SKILL.md`. `SKILL.md` uses the same YAML front-matter loader as CustomSkillsV2, but the catalog omits `title` and shows only ID plus `description` / `usage`. Other files in the directory are listed as absolute resource paths when the skill is loaded, but their contents are not injected automatically.
 
 A `load_skill` tool lets the LLM fetch skill content at runtime by `skill_id`, injected into the system prompt as an available-tools catalog. When skills are available, `primary-system.velin.md` includes Skill Activation guidance: before answering or using other task-specific tools, the LLM must check the listed skills and load a clearly matching skill by exact ID. This decouples skill authoring from code changes — adding a skill is just creating a supported `.md` file or skill directory.
@@ -632,6 +633,8 @@ Long-running shell tasks managed by `src/background-task/`. The Driver's `start_
 Telegram typing updates are ephemeral and only arrive reliably while Telegram considers the userbot online and interested in the chat. During Driver debounce windows, `src/telegram/typing-poll.ts` starts a debounce-scoped typing presence watch: a shared `account.updateStatus(offline=false)` heartbeat every 50 seconds, `markAsRead(peer)` for the watched chat, raw MTProto typing updates from `src/telegram/userbot.ts`, and `updates.getChannelDifference` fallback polling for supergroups/channels. Basic groups rely on raw `UpdateChatUserTyping` plus the same heartbeat/read priming. `src/telegram/typing-action.ts` classifies typing-like actions shared by both update paths. Typing events within a 6s validity window extend the reply debounce timer.
 
 ### Context Compaction
+
+The upstream integration preserves the local `prompts/IDENTITY.velin.md` while updating other templates. Main-turn system prompt and tools are reused for cache-prefix continuity with `tool_choice: none`; the compressor role override, rules and output format are appended as the final user instruction. `identityName` configuration is consumed by the main prompt through shared prefix builders. Message bodies render as Markdown inside XML envelopes. OneBot supports first-level merged forwards (nested forwards remain placeholders), historical mention/forward failure fallbacks, and the local history cursor safeguards.
 
 Compaction proactively summarizes historical conversation context to prevent LLM context overflow. Implemented as an independent reactive effect (`alien-signals`) that runs in parallel with the main reply flow.
 
@@ -662,8 +665,6 @@ Manual `/compact` commands on Telegram and OneBot use the same per-chat compacti
 | created_at | INTEGER NOT NULL | millisecond timestamp |
 
 **Compaction is NOT a turn**: compaction has its own dedicated table, not stored in `turn_responses`. It produces a summary (pure text with structured sections), not a provider-format response.
-
-**Prompt-cache prefix reuse**: `runCompaction()` reuses the same system prompt and tool schema as a main turn (`src/driver/turn-prefix.ts` rebuilds the main-turn params), appending the `compaction-late-binding` instruction as the final user message. Tool calls are forbidden at the API boundary via `tool_choice: none` (supersedes `forceToolCall` in all three provider streamers). Providers that cache in `tools → system → messages` order (Anthropic, OpenAI) can then hit the cached prefix instead of re-billing the whole window. This only saves cost when the compaction endpoint matches the primary model (`compaction.model` unset or pointing at the same model/`apiBaseUrl`); a differing compaction model logs a note and gains nothing. The trade-off is that the chat persona is present in the system prompt, so the trailing instruction explicitly overrides the role to "conversation compressor".
 
 **Token estimation**: Context size is estimated using a `CHARS_PER_TOKEN = 2` heuristic (not an actual tokenizer). Summary size is excluded from the compaction trigger check to prevent the summary from growing until it fills the budget (which would degrade compaction into a sliding window). `findWorkingWindowCursor` counts both RC segments and TRs when determining the cursor position.
 

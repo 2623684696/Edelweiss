@@ -1,6 +1,7 @@
 import type { Logger } from '@guiiai/logg';
 
 import { adaptOneBotMessage } from './adaptation';
+import { createHistoryCursor } from './history-cursor';
 import { resolveOneBotImageAltText } from './image-to-text';
 import { createOneBotPlatformAdapter, createOneBotServer } from './index';
 import { createOneBotIngress } from './ingress';
@@ -133,6 +134,7 @@ export const startOneBot = async (deps: OneBotStartupDeps): Promise<OneBotStartu
   for (const chatId of onebotGroupChats) {
     const pulledMessages = [];
     let lastMessageId = deps.getLastMessageId(chatId);
+    const historyCursor = createHistoryCursor(lastMessageId);
 
     while (true) {
       try {
@@ -140,11 +142,20 @@ export const startOneBot = async (deps: OneBotStartupDeps): Promise<OneBotStartu
         if (messages.length <= 1) break;
         // Skip any message the live ingress path already reserved — `tryAdd`
         // returns false for those, so the overlap window is processed once.
-        pulledMessages.push(...messages.slice(1).filter(msg => dedup.tryAdd(chatId, msg.message_id)));
+        const addedMessages = messages.slice(1).filter(msg => dedup.tryAdd(chatId, msg.message_id));
+        pulledMessages.push(...addedMessages);
         if (messages.length > 0) {
           const lastMessage = messages[messages.length - 1]!;
-          lastMessageId = String(lastMessage.message_id);
-          deps.logger.withFields({ chatId, pulled: messages.length - 1 }).log('Pulled messages from OneBot');
+          const nextMessageId = String(lastMessage.message_id);
+          deps.logger.withFields({ chatId, pulled: messages.length - 1, added: addedMessages.length, cursor: lastMessageId, nextCursor: nextMessageId }).log('Pulled messages from OneBot');
+          // Track cursors independently of live-ingress dedup: an all-live page
+          // can still advance, while a repeated page must terminate replay.
+          if (!historyCursor.advance(nextMessageId)) {
+            deps.logger.withFields({ chatId, cursor: lastMessageId, nextCursor: nextMessageId })
+              .warn('Stopping OneBot history pull: repeated cursor or page limit reached');
+            break;
+          }
+          lastMessageId = nextMessageId;
         }
       } catch (err) {
         deps.logger.withError(err).error(`Failed to fetch messages for chat ${chatId}`);
