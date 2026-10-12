@@ -21,6 +21,7 @@ export default function registerTelegramDriverHooks({ get, register }: Registrar
       loadMessageAttachments: (chatId, messageId) => loadMessageAttachments(db, chatId, messageId),
       getIntermediateContext: chatId => pipeline.getIC(chatId),
       resolveChatPlatform: id => resolveChatConfig(config, id).platform,
+      getDisabledReactions: id => resolveChatConfig(config, id).disabledReactions,
     });
   });
 }

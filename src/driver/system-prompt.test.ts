@@ -5,6 +5,7 @@ import { renderMarkdownString } from '@velin-dev/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderPromptTemplate } from '../prompt-template';
+import { filterDisabledReactions } from '../telegram/reaction-policy';
 
 // basePath must be a file (not directory) so createRequire resolves pnpm's node_modules
 const basePath = resolve(__dirname, '../../package.json');
@@ -93,11 +94,12 @@ describe('primary-system.velin.md', () => {
     const rendered = await renderSystem({
       modelName: 'gpt-4o',
       hasReactTool: true,
-      availableReactionEmojis: ['👍', '❤️'],
+      availableReactionEmojis: filterDisabledReactions(['👍', '❤️', '😁', '🖕', '😇'], ['😁', '🖕', '😇']),
     });
 
     expect(rendered).toContain('`react_message`');
     expect(rendered).toContain('Allowed reaction emoji: 👍 ❤️');
+    expect(rendered).not.toMatch(/😁|🖕|😇/u);
     expect(rendered).toContain('low-disturbance alternative');
     expect(rendered).toContain('use `react_message` if one fits');
     expect(rendered).toContain('Do not also send a text explanation when the reaction alone carries the intent');

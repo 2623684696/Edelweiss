@@ -94,6 +94,7 @@ const chatConfig = (debounce: ResolvedChatConfig['debounce']): ResolvedChatConfi
   },
   debounce,
   blockedUserIds: [],
+  disabledReactions: ['😁', '🖕🏻', '😇'],
   humanLikeness: {
     trailingPeriod: false,
     denseClausePunctuation: false,

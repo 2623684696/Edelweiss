@@ -8,6 +8,7 @@ import type { TelegramEventSink } from './event-sink';
 import type { TelegramManager } from './manager';
 import { renderMarkdownToTelegramHTML } from './markdown';
 import type { Attachment } from './message/types';
+import { filterDisabledReactions, isReactionDisabled } from './reaction-policy';
 import type { TelegramReactionStore } from './stores';
 import type { RuntimeConfig } from '../config/config';
 
@@ -36,6 +37,7 @@ export interface TelegramDriverHooksDeps {
   loadMessageAttachments: (chatId: string, messageId: number) => Attachment[] | undefined;
   getIntermediateContext: (chatId: string) => { nodes: Array<{ type: string; messageId?: string }> } | undefined;
   resolveChatPlatform: (chatId: string) => string;
+  getDisabledReactions: (chatId: string) => string[];
 }
 
 const readWorkspaceFile = (runtimeConfig: RuntimeConfig, path: string): Promise<Buffer> =>
@@ -157,12 +159,18 @@ export const createTelegramDriverHooks = (deps: TelegramDriverHooksDeps): Telegr
       ? (chatId, messageId) => deps.manager.userbot!.downloadMessageMedia(chatId, messageId)
       : undefined,
     refreshAllowedReactionEmojis: deps.manager.userbot
-      ? (chatId, signal) => deps.manager.refreshAllowedReactionEmojis(chatId, signal)
+      ? async (chatId, signal) => filterDisabledReactions(
+        await deps.manager.refreshAllowedReactionEmojis(chatId, signal), deps.getDisabledReactions(chatId),
+      )
       : undefined,
     getAllowedReactionEmojis: deps.manager.userbot
-      ? chatId => deps.manager.getAllowedReactionEmojis(chatId)
+      ? chatId => filterDisabledReactions(deps.manager.getAllowedReactionEmojis(chatId), deps.getDisabledReactions(chatId))
       : undefined,
-    sendReaction: (chatId, messageId, emoji) => deps.manager.sendReaction(chatId, messageId, emoji),
+    sendReaction: async (chatId, messageId, emoji) => {
+      if (isReactionDisabled(emoji, deps.getDisabledReactions(chatId)))
+        throw new Error('Reaction emoji is disabled in this Telegram chat');
+      await deps.manager.sendReaction(chatId, messageId, emoji);
+    },
     onDebounceStateChange: (chatId, isDebouncing) => {
       if (deps.resolveChatPlatform(chatId) !== 'telegram') return;
       if (isDebouncing) {

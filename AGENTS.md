@@ -432,6 +432,8 @@ Reaction IC nodes render as passive `<event type="reaction_added" .../>` RC segm
 
 `react_message` is registered only for Telegram chats with a configured userbot and a non-empty allowed emoji list. Do not add reaction prompt text or tools to OneBot/QQ paths.
 
+Outgoing reaction policy is configured via `disabledReactions` in `chats.default` or a per-chat override (schema default `['😁', '🖕', '😇']`). Overrides replace the entire list; `[]` clears it. `src/telegram/reaction-policy.ts` matches exact Telegram reaction emoji strings. Driver hooks filter both refreshed and cached allowed lists before they reach tool enums / prompt lists, and independently reject disabled sends (including stale tool calls). Incoming passive reaction history is unaffected. Focused coverage lives in `src/config/config.test.ts` and `src/telegram/driver-hooks.test.ts`.
+
 ### Sticker Pack Title Normalization
 
 Telegram exposes sticker/custom-emoji packs by raw `set_name` slug. Edelweiss keeps that raw slug as `stickerSetId` and resolves the human-readable pack title into `stickerSetName` before messages enter Adaptation. Rendering and prompt generation must treat `stickerSetName` as display title only.
