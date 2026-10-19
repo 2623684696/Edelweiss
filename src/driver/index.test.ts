@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createDriver } from './index';
+import { createRunner } from './runner';
 import type { ResolvedChatConfig, RuntimeConfig } from '../config/config';
 import { setupLogger, useLogger } from '../config/logger';
 import type { LlmEndpoint, Usage } from '../llm/types';
@@ -183,6 +184,31 @@ describe('createDriver debounce scheduling', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('reports runner setup failure and releases running for subsequent input', async () => {
+    const error = new Error('runner setup failed');
+    mocks.callModelStep.mockResolvedValue({ entries: [], toolCalls: [], usage, requestedAtMs: 0 });
+    const logger = useLogger('setup-failure-test');
+    const errorLog = vi.spyOn(console, 'error');
+    const driver = createTestDriver({
+      initialDelayMs: 1000, typingExtendMs: 200, maxDelayMs: 5000, typingExemptUsers: [],
+    }, undefined, { logger });
+    try {
+      driver.handleEvent('chat', rc(100));
+      vi.mocked(createRunner).mockImplementationOnce(() => { throw error; });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(mocks.callModelStep).not.toHaveBeenCalled();
+      expect(errorLog.mock.calls.flat().join(' ')).toContain('Main turn setup failed before lifecycle started');
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(mocks.callModelStep).not.toHaveBeenCalled();
+      driver.handleEvent('chat', rc(100, 200));
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(mocks.callModelStep).toHaveBeenCalledTimes(1);
+    } finally {
+      driver.stop();
+      errorLog.mockRestore();
+    }
   });
 
   it('uses typingExtendMs after new messages interrupt a running call', async () => {
