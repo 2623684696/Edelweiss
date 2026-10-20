@@ -41,6 +41,13 @@ const renderSystem = (data: Record<string, unknown> = {}) =>
   renderPromptTemplate(systemTemplate, { chatId: 'chat-123', chatName: 'Test Chat', identityName: 'Edelweiss', ...data }, basePath);
 
 describe('primary-system.velin.md', () => {
+  it.each(['force', 'local-force', 'none', 'local-none', undefined])('preserves silence instructions for toolChoice %s', async toolChoice => {
+    const rendered = await renderSystem({ toolChoice });
+    const forced = toolChoice === 'force' || toolChoice === 'local-force';
+    expect(rendered.includes('To stay silent, call `stay_silent`.')).toBe(forced);
+    expect(rendered.includes('To stay silent, simply do not call `send_message`.')).toBe(!forced);
+  });
+
   it('renders with minimal props', async () => {
     const rendered = await renderSystem({ modelName: 'gpt-4o' });
     expect(rendered).toMatch(/^language: zh-CN\s+model: gpt-4o\s+current-channel: telegram\s+chat_name: Test Chat\s+chat_id: chat-123\s+/);

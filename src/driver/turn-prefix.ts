@@ -37,7 +37,7 @@ export const buildMainSystemPromptParams = (params: {
   identityName: params.chatConfig.identityName,
   currentChannel: params.chatConfig.platform,
   modelName: params.chatConfig.primaryModel.model,
-  forceToolCall: params.chatConfig.primaryModel.forceToolCall,
+  toolChoice: params.chatConfig.primaryModel.toolChoice,
   systemFiles: params.chatConfig.systemFiles,
   hasLoadSkillTool: params.allSkills.size > 0,
   hasSubagentTools: params.chatConfig.subagents.enabled,

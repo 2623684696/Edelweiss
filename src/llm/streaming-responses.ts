@@ -10,6 +10,7 @@ import type {
   ResponsesResult,
 } from './responses-types';
 import { parseSSEStream } from './sse';
+import type { ToolChoice } from './tool-choice';
 
 export interface StreamingResponsesParams {
   baseURL: string;
@@ -18,9 +19,8 @@ export interface StreamingResponsesParams {
   input: unknown[];
   instructions?: string;
   tools?: ResponseTool[];
-  forceToolCall?: boolean | 'api' | 'local';
-  /** Overrides forceToolCall. 'none' forbids tool calls (used by compaction). */
-  toolChoice?: 'none';
+  toolChoice?: ToolChoice;
+  onToolCallStart?: () => void;
   timeoutSec?: number;
   extraBody?: Record<string, unknown>;
   signal?: AbortSignal;
@@ -42,14 +42,9 @@ export const streamingResponses = async (params: StreamingResponsesParams): Prom
   const timeout = params.timeoutSec
     ? setTimeout(() => abortController.abort(new Error(`responses request timed out after ${params.timeoutSec}s`)), params.timeoutSec * 1000)
     : undefined;
-  // If external signal triggers, abort the request
-  if (params.signal) {
-    if (params.signal.aborted) {
-      abortController.abort(new Error('Request aborted before start'));
-    } else {
-      params.signal.addEventListener('abort', () => abortController.abort(params.signal!.reason), { once: true });
-    }
-  }
+  const onAbort = () => abortController.abort(params.signal!.reason);
+  if (params.signal?.aborted) onAbort();
+  else params.signal?.addEventListener('abort', onAbort, { once: true });
 
   try {
     const body = JSON.stringify({
@@ -59,7 +54,7 @@ export const streamingResponses = async (params: StreamingResponsesParams): Prom
       ...(params.tools && params.tools.length > 0 ? { tools: params.tools } : {}),
       ...(params.toolChoice === 'none'
         ? { tool_choice: 'none' }
-        : params.forceToolCall === true || params.forceToolCall === 'api'
+        : params.toolChoice === 'force'
           ? { tool_choice: 'required' }
           : {}),
       ...(params.extraBody ?? {}),
@@ -116,6 +111,7 @@ export const streamingResponses = async (params: StreamingResponsesParams): Prom
         const item = event.item as ResponseOutputItem;
         output[outputIndex] = item;
         if (item.type === 'function_call') {
+          params.onToolCallStart?.();
           flushTextBuf();
           flushReasoningBuf();
           log.withFields({ label, tool: item.name }).log('tool call start');
@@ -184,7 +180,7 @@ export const streamingResponses = async (params: StreamingResponsesParams): Prom
       }
     };
 
-    await parseSSEStream(stream, processEvent);
+    await parseSSEStream(stream, processEvent, abortController.signal);
     flushTextBuf();
     flushReasoningBuf();
 
@@ -201,6 +197,7 @@ export const streamingResponses = async (params: StreamingResponsesParams): Prom
 
     return { output, usage, status };
   } finally {
+    params.signal?.removeEventListener('abort', onAbort);
     if (timeout) clearTimeout(timeout);
   }
 };

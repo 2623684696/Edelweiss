@@ -9,7 +9,7 @@ const props = defineProps({
   hasReactTool: { type: Boolean, default: false },
   availableReactionEmojis: { type: Array, default: () => [] },
   availableSkills: { type: Array, default: () => [] },
-  forceToolCall: { type: Boolean, default: false },
+  toolChoice: { type: String, default: '' },
   systemFiles: { type: Array, default: () => [] },
 })
 const platformDescription = computed(() => {

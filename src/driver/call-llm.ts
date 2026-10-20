@@ -4,9 +4,11 @@ import type { Logger } from '@guiiai/logg';
 
 import { DUMP_DIR } from './constants';
 import { trimImages } from './context';
+import { extractToolCalls } from './tools';
 import { streamingChat, type StreamingChatResult } from '../llm/streaming';
 import { streamingMessages } from '../llm/streaming-messages';
 import { streamingResponses } from '../llm/streaming-responses';
+import { DEFAULT_LOCAL_FORCE_MAX_RETRIES, type ToolChoice } from '../llm/tool-choice';
 import type { ProviderFormat, Usage } from '../llm/types';
 import {
   fromChatCompletionsOutput,
@@ -27,7 +29,9 @@ export interface LlmCallConfig {
   model: string;
   apiFormat?: ProviderFormat;
   timeoutSec?: number;
-  forceToolCall?: boolean | 'api' | 'local';
+  toolChoice?: ToolChoice;
+  localForceMaxRetries?: number;
+  onToolCallStart?: () => void;
   extraBody?: Record<string, unknown>;
   signal?: AbortSignal;
 }
@@ -80,12 +84,12 @@ const chatUsageToUsage = (usage: StreamingChatResult['usage']): Usage => ({
   cacheReadTokens: usage.prompt_cache_hit_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? -1,
 });
 
-export const callLlm = async (
+const callLlmAttempt = async (
   config: LlmCallConfig,
   entries: ConversationEntry[],
   system: string,
   tools?: ToolSchema[],
-  options?: { log: Logger; label: string; dumpId?: string; maxImagesAllowed?: number; toolChoice?: 'none' },
+  options?: { log: Logger; label: string; dumpId?: string; maxImagesAllowed?: number; toolChoice?: ToolChoice },
 ): Promise<LlmCallResult> => {
   const apiFormat: ProviderFormat = config.apiFormat ?? 'openai-chat';
   const log = options?.log;
@@ -102,8 +106,8 @@ export const callLlm = async (
 
     const response = await streamingResponses({
       baseURL: config.apiBaseUrl, apiKey: config.apiKey, model: config.model,
-      forceToolCall: config.forceToolCall,
-      toolChoice: options?.toolChoice,
+      toolChoice: options?.toolChoice ?? config.toolChoice,
+      onToolCallStart: config.onToolCallStart,
       input, instructions: system, ...(wireTools ? { tools: wireTools } : {}),
       extraBody: config.extraBody,
       log: log!, label, timeoutSec: config.timeoutSec, signal: config.signal,
@@ -160,8 +164,8 @@ export const callLlm = async (
 
     const response = await streamingMessages({
       baseURL: config.apiBaseUrl, apiKey: config.apiKey, model: config.model,
-      forceToolCall: config.forceToolCall,
-      toolChoice: options?.toolChoice,
+      toolChoice: options?.toolChoice ?? config.toolChoice,
+      onToolCallStart: config.onToolCallStart,
       system: cachedSystem, messages, ...(wireTools ? { tools: wireTools } : {}),
       extraBody: config.extraBody,
       log: log!, label, timeoutSec: config.timeoutSec, signal: config.signal,
@@ -186,8 +190,8 @@ export const callLlm = async (
 
   const response = await streamingChat({
     baseURL: config.apiBaseUrl, apiKey: config.apiKey, model: config.model,
-    forceToolCall: config.forceToolCall,
-    toolChoice: options?.toolChoice,
+    toolChoice: options?.toolChoice ?? config.toolChoice,
+    onToolCallStart: config.onToolCallStart,
     messages: chatMessages, system, ...(wireTools ? { tools: wireTools } : {}),
     extraBody: config.extraBody,
     log: log!, label, timeoutSec: config.timeoutSec, signal: config.signal,
@@ -203,4 +207,62 @@ export const callLlm = async (
     entries: fromChatCompletionsOutput([choice.message as ChatCompletionsAssistantMessage]),
     usage: chatUsageToUsage(response.usage),
   };
+};
+
+/** Retry only policy rejections; each attempt owns its cancellation scope. */
+export const callLlm = async (
+  config: LlmCallConfig,
+  entries: ConversationEntry[],
+  system: string,
+  tools?: ToolSchema[],
+  options?: Parameters<typeof callLlmAttempt>[4],
+): Promise<LlmCallResult> => {
+  const policy = options?.toolChoice ?? config.toolChoice;
+  const maxRetries = config.localForceMaxRetries ?? DEFAULT_LOCAL_FORCE_MAX_RETRIES;
+  let retryEntries = entries;
+  let usage: Usage | undefined;
+  for (let attempt = 0; ; attempt++) {
+    config.signal?.throwIfAborted();
+    const controller = new AbortController();
+    const onAbort = () => controller.abort(config.signal!.reason);
+    config.signal?.addEventListener('abort', onAbort, { once: true });
+    const rejection = new Error('local-none: tool call rejected');
+    try {
+      const result = await callLlmAttempt({
+        ...config,
+        toolChoice: policy,
+        signal: controller.signal,
+        onToolCallStart: policy === 'local-none' ? () => {
+          controller.abort(rejection);
+          throw rejection;
+        } : undefined,
+      }, retryEntries, system, tools, options);
+      config.signal?.throwIfAborted();
+      const add = (a: number, b: number) => a === -1 || b === -1 ? -1 : a + b;
+      usage = usage ? {
+        inputTokens: add(usage.inputTokens, result.usage.inputTokens),
+        outputTokens: add(usage.outputTokens, result.usage.outputTokens),
+        cacheCreationTokens: add(usage.cacheCreationTokens, result.usage.cacheCreationTokens),
+        cacheReadTokens: add(usage.cacheReadTokens, result.usage.cacheReadTokens),
+      } : result.usage;
+      if (policy !== 'local-force' || extractToolCalls(result.entries).length > 0 || attempt >= maxRetries)
+        return { ...result, usage };
+      options?.log.withFields({ label: options.label, attempt: attempt + 1, maxRetries })
+        .log('local-force: model returned no tool calls, retrying');
+    } catch (error) {
+      config.signal?.throwIfAborted();
+      if (error !== rejection) throw error;
+      // Deliberately cumulative, but private to this call; never mutate persisted entries.
+      retryEntries = [...retryEntries, {
+        kind: 'message', role: 'user', parts: [{ kind: 'text', text: 'DO NOT CALL ANY TOOLS.' }],
+      }];
+      options?.log.withFields({ label: options.label, attempt: attempt + 1 })
+        .log('local-none: tool call rejected, retrying; usage incomplete (aborted attempt usage unavailable)');
+    } finally {
+      config.signal?.removeEventListener('abort', onAbort);
+    }
+    // Yield between unbounded retries so timers/external messages can abort even a fast stream.
+    await new Promise<void>(resolve => setImmediate(resolve));
+    config.signal?.throwIfAborted();
+  }
 };

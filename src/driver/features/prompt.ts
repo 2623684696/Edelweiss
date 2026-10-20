@@ -27,7 +27,7 @@ export const createPromptFeature = (deps: MainTurnFeatureDeps): DriverFeature =>
 
     injectLateBindingPrompt(turn.entries, await renderLateBindingPrompt({
       timeNow: deps.nowString(),
-      forceToolCall: deps.chatConfig.primaryModel.forceToolCall,
+      toolChoice: deps.chatConfig.primaryModel.toolChoice,
       isMentioned,
       isReplied,
       isAssociatedChannelPost,

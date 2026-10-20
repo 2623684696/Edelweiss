@@ -1,3 +1,5 @@
+import type { ToolChoice } from './tool-choice';
+
 export type ProviderFormat = 'openai-chat' | 'responses' | 'anthropic-messages';
 
 export interface LlmEndpoint {
@@ -15,8 +17,9 @@ export interface LlmEndpoint {
    * (`reasoning`, `text`, ...). Caller is responsible for not stomping on
    * structural fields we set (model, messages, tools, etc.). */
   extraBody?: Record<string, unknown>;
-  /** Force tool call. true = always call a tool */
-  forceToolCall?: boolean | 'api' | 'local';
+  toolChoice?: ToolChoice;
+  /** Retries after the initial local-force attempt; defaults to 3. */
+  localForceMaxRetries?: number;
 }
 
 export interface Usage {

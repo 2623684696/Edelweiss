@@ -6,9 +6,9 @@ import { loadConfig, resolveChatConfig } from './config';
 
 vi.mock('node:fs', () => ({ readFileSync: vi.fn() }));
 
-const loadFixture = (chats: Record<string, unknown> = {}) => {
+const loadFixture = (chats: Record<string, unknown> = {}, endpoint: Record<string, unknown> = {}) => {
   vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
-    models: { primary: { apiBaseUrl: '', apiKey: '', model: 'test' } },
+    models: { primary: { apiBaseUrl: '', apiKey: '', model: 'test', ...endpoint } },
     runtime: { writeFile: ['tee'], readFile: ['cat'] },
     chats: { default: { tools: { webSearch: { tavilyKey: 'test' } } }, ...chats },
   }));
@@ -34,5 +34,25 @@ describe('disabledReactions config', () => {
     const config = loadFixture({ default: { disabledReactions: ['❤️'], tools: { webSearch: { tavilyKey: 'test' } } } });
     expect(resolveChatConfig(config, 'chat').disabledReactions).toEqual(['❤️']);
     expect(() => loadFixture({ a: { disabledReactions: [42] } })).toThrow();
+  });
+});
+
+describe('tool selection config', () => {
+  it('defaults to automatic selection and three local-force retries', () => {
+    const endpoint = loadFixture().models.primary!;
+    expect(endpoint.toolChoice).toBeUndefined();
+    expect(endpoint.localForceMaxRetries).toBe(3);
+  });
+
+  it.each(['force', 'local-force', 'none', 'local-none'])('accepts toolChoice %s', toolChoice => {
+    expect(loadFixture({}, { toolChoice }).models.primary!.toolChoice).toBe(toolChoice);
+  });
+
+  it.each([0, 5])('accepts %s local-force retries', localForceMaxRetries => {
+    expect(loadFixture({}, { localForceMaxRetries }).models.primary!.localForceMaxRetries).toBe(localForceMaxRetries);
+  });
+
+  it.each([-1, 1.5, '3'])('rejects invalid retry limit %s', localForceMaxRetries => {
+    expect(() => loadFixture({}, { localForceMaxRetries })).toThrow();
   });
 });

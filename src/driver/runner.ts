@@ -175,43 +175,17 @@ export const createRunner = (config: RunnerConfig) => {
     const stepRequestedAt = Date.now();
     const toolSchemas = params.tools.map(toToolSchema);
 
-    const MAX_FORCE_TOOL_RETRIES = 3;
-
-    let result!: Awaited<ReturnType<typeof callLlm>>;
-    let usage: Usage = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: -1, cacheReadTokens: -1 };
-
-    for (let attempt = 0; attempt < (config.forceToolCall ? MAX_FORCE_TOOL_RETRIES + 1 : 1); attempt++) {
-      result = await callLlm({ ...config, signal: params.signal }, workingEntries, params.system, toolSchemas, {
-        log: params.log,
-        label: `step:${step}`,
-        dumpId: params.chatId,
-        maxImagesAllowed: params.maxImagesAllowed,
-      });
-
-      const add = (a: number, b: number) => (a === -1 || b === -1) ? -1 : a + b;
-      usage = {
-        inputTokens: usage.inputTokens + result.usage.inputTokens,
-        outputTokens: usage.outputTokens + result.usage.outputTokens,
-        cacheCreationTokens: add(usage.cacheCreationTokens, result.usage.cacheCreationTokens),
-        cacheReadTokens: add(usage.cacheReadTokens, result.usage.cacheReadTokens),
-      };
-
-      if (!config.forceToolCall) break;
-
-      const toolCalls = extractToolCalls(result.entries);
-      if (toolCalls.length > 0) break;
-
-      if (attempt < MAX_FORCE_TOOL_RETRIES) {
-        params.log.withFields({
-          chatId: params.chatId, step, attempt: attempt + 1, maxRetries: MAX_FORCE_TOOL_RETRIES,
-        }).log('forceToolCall: model returned no tool calls, retrying');
-      }
-    }
+    const result = await callLlm({ ...config, signal: params.signal }, workingEntries, params.system, toolSchemas, {
+      log: params.log,
+      label: `step:${step}`,
+      dumpId: params.chatId,
+      maxImagesAllowed: params.maxImagesAllowed,
+    });
 
     return {
       entries: result!.entries,
       toolCalls: extractToolCalls(result!.entries),
-      usage,
+      usage: result.usage,
       requestedAtMs: stepRequestedAt,
     };
   };

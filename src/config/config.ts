@@ -7,6 +7,7 @@ import { parse as parseYaml } from 'yaml';
 
 import type { CompactionConfig } from '../driver/types';
 import type { WebFetchConfig } from '../driver/web-fetch/types';
+import { DEFAULT_LOCAL_FORCE_MAX_RETRIES } from '../llm/tool-choice';
 import type { LlmEndpoint, ProviderFormat } from '../llm/types';
 
 const llmEndpointEntries = {
@@ -18,7 +19,8 @@ const llmEndpointEntries = {
   timeoutSec: v.optional(v.number()),
   descriptionConcurrency: v.optional(v.number()),
   extraBody: v.optional(v.record(v.string(), v.unknown())),
-  forceToolCall: v.optional(v.union([v.boolean(), v.literal('api'), v.literal('local')])),
+  localForceMaxRetries: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0)), DEFAULT_LOCAL_FORCE_MAX_RETRIES),
+  toolChoice: v.optional(v.picklist(['force', 'local-force', 'none', 'local-none'])),
 };
 
 // --- Runtime config schema (top-level, global) ---

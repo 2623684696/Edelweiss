@@ -1,6 +1,7 @@
 import type { Logger } from '@guiiai/logg';
 
 import { parseSSEStream } from './sse';
+import type { ToolChoice } from './tool-choice';
 import type { ChatCompletionsAssistantMessage } from '../unified-api/chat-types';
 
 // Chat Completions SSE chunk shape (subset we consume)
@@ -55,9 +56,8 @@ export interface StreamingChatParams {
   messages: unknown[];
   system?: string;
   tools?: ToolSchema[];
-  forceToolCall?: boolean | 'api' | 'local';
-  /** Overrides forceToolCall. 'none' forbids tool calls (used by compaction). */
-  toolChoice?: 'none';
+  toolChoice?: ToolChoice;
+  onToolCallStart?: () => void;
   timeoutSec?: number;
   extraBody?: Record<string, unknown>;
   signal?: AbortSignal;
@@ -78,14 +78,9 @@ export const streamingChat = async (params: StreamingChatParams): Promise<Stream
   const timeout = params.timeoutSec
     ? setTimeout(() => abortController.abort(new Error(`chat request timed out after ${params.timeoutSec}s`)), params.timeoutSec * 1000)
     : undefined;
-  // If external signal triggers, abort the request
-  if (params.signal) {
-    if (params.signal.aborted) {
-      abortController.abort(new Error('Request aborted before start'));
-    } else {
-      params.signal.addEventListener('abort', () => abortController.abort(params.signal!.reason), { once: true });
-    }
-  }
+  const onAbort = () => abortController.abort(params.signal!.reason);
+  if (params.signal?.aborted) onAbort();
+  else params.signal?.addEventListener('abort', onAbort, { once: true });
 
   try {
     const body = JSON.stringify({
@@ -97,7 +92,7 @@ export const streamingChat = async (params: StreamingChatParams): Promise<Stream
       ...(params.tools && params.tools.length > 0 ? { tools: params.tools } : {}),
       ...(params.toolChoice === 'none'
         ? { tool_choice: 'none' }
-        : params.forceToolCall === true || params.forceToolCall === 'api'
+        : params.toolChoice === 'force'
           ? { tool_choice: 'required' }
           : {}),
       ...(params.extraBody ?? {}),
@@ -211,6 +206,7 @@ export const streamingChat = async (params: StreamingChatParams): Promise<Stream
       if (delta.tool_calls) {
         message.tool_calls ??= [];
         for (const tc of delta.tool_calls) {
+          params.onToolCallStart?.();
           const idx = tc.index ?? 0;
           message.tool_calls[idx] ??= {
             id: tc.id ?? '',
@@ -232,7 +228,7 @@ export const streamingChat = async (params: StreamingChatParams): Promise<Stream
       }
     };
 
-    await parseSSEStream(stream, processChunk);
+    await parseSSEStream(stream, processChunk, abortController.signal);
     flushTextBuf();
     flushReasoningBuf();
 
@@ -249,6 +245,7 @@ export const streamingChat = async (params: StreamingChatParams): Promise<Stream
       usage,
     };
   } finally {
+    params.signal?.removeEventListener('abort', onAbort);
     if (timeout) clearTimeout(timeout);
   }
 };

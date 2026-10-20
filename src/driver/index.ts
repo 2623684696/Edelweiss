@@ -93,7 +93,8 @@ export const createDriver = (config: DriverConfig, deps: {
         apiFormat: endpoint.apiFormat ?? 'openai-chat',
         timeoutSec: endpoint.timeoutSec,
         extraBody: endpoint.extraBody,
-        forceToolCall: endpoint.forceToolCall,
+        toolChoice: endpoint.toolChoice,
+        localForceMaxRetries: endpoint.localForceMaxRetries,
       });
       runners.set(key, runner);
     }

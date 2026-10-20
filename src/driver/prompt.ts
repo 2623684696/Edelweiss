@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { renderMarkdownString } from '@velin-dev/core';
 
+import type { ToolChoice } from '../llm/tool-choice';
 import { cleanVelinOutput, renderPromptTemplate } from '../prompt-template';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -35,7 +36,7 @@ export interface SystemPromptParams {
   hasAskForImageTool?: boolean;
   availableReactionEmojis?: string[];
   availableSkills?: AvailableSkillPromptInfo[];
-  forceToolCall?: boolean | 'api' | 'local';
+  toolChoice?: ToolChoice;
 }
 
 export const renderSystemPrompt = async (params: SystemPromptParams) => {
@@ -52,7 +53,7 @@ export const renderSystemPrompt = async (params: SystemPromptParams) => {
     hasAskForImageTool: params.hasAskForImageTool,
     availableReactionEmojis: params.availableReactionEmojis,
     availableSkills: params.availableSkills,
-    forceToolCall: params.forceToolCall !== false && params.forceToolCall !== undefined,
+    toolChoice: params.toolChoice,
     systemFiles: params.systemFiles,
   }, basePath);
 };
@@ -76,11 +77,11 @@ export const renderLateBindingPrompt = async (params: {
   recentSendMessageHumanLikenessXml?: string;
   activeBackgroundTasks?: { id: number; typeName: string; intention?: string; liveSummary: string; startedMs: number; timeoutMs: number }[];
   isInterrupted?: boolean;
-  forceToolCall?: boolean | 'api' | 'local';
+  toolChoice?: ToolChoice;
 }) => {
   const { rendered } = await renderMarkdownString(lateBindingTemplate, {
     ...params,
-    forceToolCall: params.forceToolCall !== false && params.forceToolCall !== undefined,
+    toolChoice: params.toolChoice,
   }, basePath);
   return cleanVelinOutput(rendered);
 };

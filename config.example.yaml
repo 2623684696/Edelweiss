@@ -16,7 +16,8 @@ models:
     #   reasoning:                   #   responses: GPT effort + summary opt-in (summary is required to surface reasoning text).
     #     effort: "low"
     #     summary: "auto"
-    # forceToolCall: false             # force the model to always call a tool
+    # localForceMaxRetries: 3          # retries after first local-force attempt; non-negative integer
+    # toolChoice: force                # force | local-force | none | local-none; omit for automatic selection
 telegram:
   botToken: ""
   apiId: 0
