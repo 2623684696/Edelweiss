@@ -175,7 +175,8 @@ const createApiClient = (
           if (msg.status === 'ok') {
             pending.resolve(msg.data);
           } else {
-            pending.reject(new Error(`OneBot API error: action=${pending.action}, retcode=${msg.retcode}`));
+            const detail = [msg.wording, msg.message].filter(value => typeof value === 'string' && value.trim()).join('; ');
+            pending.reject(new Error(redactSecrets(`OneBot API error: action=${pending.action}, retcode=${msg.retcode}${detail ? `, detail=${detail}` : ''}`)));
           }
         }
         return;
@@ -236,7 +237,7 @@ const createApiClient = (
       return { messageId: String(result.message_id) };
     },
 
-    downloadFile: async (file: string, _chatId: string): Promise<Buffer> => {
+    downloadFile: async (file: string, chatId: string): Promise<Buffer> => {
       // 对 napcat get_file / get_image 的封装
       if (file.startsWith('base64://'))
         return Buffer.from(file.slice(9), 'base64');
@@ -249,7 +250,21 @@ const createApiClient = (
       // masks registered secrets (e.g. accessToken) that may appear in the URL.
       const downloadFromUrl = (url: string): Promise<Buffer> => httpGetBuffer(url, DOWNLOAD_TIMEOUT_MS);
 
-      const result = await call<OneBotGetFileResult>(action, { file });
+      let result: OneBotGetFileResult;
+      try {
+        result = await call<OneBotGetFileResult>(action, { file });
+      } catch (error) {
+        // SnowLuma get_file only resolves cached images/voice; ordinary files
+        // need the conversation scope to obtain a download URL.
+        if (isImage || !chatId) throw error;
+        const isPrivate = chatId.startsWith('private:');
+        const id = Number(isPrivate ? chatId.slice(8) : chatId);
+        if (!Number.isSafeInteger(id) || id <= 0) throw error;
+        result = await call<OneBotGetFileResult>(isPrivate ? 'get_private_file_url' : 'get_group_file_url', {
+          ...(isPrivate ? { user_id: id } : { group_id: id }),
+          file_id: file,
+        });
+      }
 
       // got file directly as base64
       if (result.base64)

@@ -134,6 +134,8 @@ export interface OneBotMessageEvent {
 export interface OneBotNoticeEvent {
   post_type: 'notice';
   notice_type: string;
+  sub_type?: string;
+  target_id?: number;
   time: number;
   self_id: number;
   group_id?: number;
@@ -165,6 +167,8 @@ export interface OneBotApiResponse<T = unknown> {
   retcode: number;
   data: T;
   echo?: string;
+  message?: string;
+  wording?: string;
 }
 
 export interface OneBotSendMessageParams {

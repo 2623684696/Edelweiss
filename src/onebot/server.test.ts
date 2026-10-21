@@ -5,7 +5,12 @@ import { WebSocket } from 'ws';
 import { createFriendRemarkCache, createGroupMemberCache, createOneBotServer } from './server';
 import type { OneBotConfig } from './types';
 import type { CanonicalUser } from '../adaption-types';
-import { redactSecrets, registerHttpSecret } from '../http';
+import { httpGetBuffer, redactSecrets, registerHttpSecret } from '../http';
+
+vi.mock('../http', async importOriginal => ({
+  ...await importOriginal<typeof import('../http')>(),
+  httpGetBuffer: vi.fn(async () => Buffer.from('document bytes')),
+}));
 
 const connectedClients = new Set<WebSocket>();
 
@@ -145,6 +150,57 @@ describe('createOneBotServer', () => {
     return client;
   };
 
+  it.each([
+    ['1101575664', 'get_group_file_url', { group_id: 1101575664 }],
+    ['private:123', 'get_private_file_url', { user_id: 123 }],
+  ])('resolves ordinary files in %s after a media cache miss', async (chatId, action, scope) => {
+    const server = createOneBotServer({ enabled: true, host: '127.0.0.1', port: 0, accessToken: '' }, {
+      onEvent: () => {}, log: useLogger('onebot-server-test'),
+    });
+    await server.start();
+    try {
+      const port = typeof server.address === 'object' ? server.address?.port : undefined;
+      const client = await connect(port!);
+      const requests: unknown[] = [];
+      client.on('message', data => {
+        const payload = JSON.parse(data.toString());
+        requests.push({ action: payload.action, params: payload.params });
+        client.send(JSON.stringify(payload.action === 'get_file'
+          ? { status: 'failed', retcode: 100, wording: 'not in media cache', echo: payload.echo }
+          : { status: 'ok', retcode: 0, data: { url: 'https://files.example/document' }, echo: payload.echo }));
+      });
+      await expect(server.api!.downloadFile('/file-uuid', chatId)).resolves.toEqual(Buffer.from('document bytes'));
+      expect(requests).toEqual([
+        { action: 'get_file', params: { file: '/file-uuid' } },
+        { action, params: { ...scope, file_id: '/file-uuid' } },
+      ]);
+      expect(httpGetBuffer).toHaveBeenCalledWith('https://files.example/document', expect.any(Number));
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it.each(['photo.png', 'voice-id'])('preserves successful media downloads for %s', async file => {
+    const server = createOneBotServer({ enabled: true, host: '127.0.0.1', port: 0, accessToken: '' }, {
+      onEvent: () => {}, log: useLogger('onebot-server-test'),
+    });
+    await server.start();
+    try {
+      const port = typeof server.address === 'object' ? server.address?.port : undefined;
+      const client = await connect(port!);
+      const actions: string[] = [];
+      client.on('message', data => {
+        const payload = JSON.parse(data.toString());
+        actions.push(payload.action);
+        client.send(JSON.stringify({ status: 'ok', retcode: 0, echo: payload.echo, data: { base64: Buffer.from('media').toString('base64') } }));
+      });
+      await expect(server.api!.downloadFile(file, '123')).resolves.toEqual(Buffer.from('media'));
+      expect(actions).toEqual([file.endsWith('.png') ? 'get_image' : 'get_file']);
+    } finally {
+      await server.stop();
+    }
+  });
+
   it('keeps the newest API when an older WebSocket closes', async () => {
     const server = createOneBotServer({
       enabled: true,
@@ -195,7 +251,7 @@ describe('createOneBotServer', () => {
     }
   });
 
-  it('includes the API action in failed response errors without exposing payloads', async () => {
+  it('includes redacted API error details without exposing data payloads', async () => {
     const server = createOneBotServer({ enabled: true, host: '127.0.0.1', port: 0, accessToken: '' }, {
       onEvent: () => {}, log: useLogger('onebot-server-test'),
     });
@@ -203,14 +259,15 @@ describe('createOneBotServer', () => {
     try {
       const port = typeof server.address === 'object' ? server.address?.port : undefined;
       const client = await connect(port!);
+      registerHttpSecret('test-api-secret');
       client.once('message', data => {
         const payload = JSON.parse(data.toString()) as { echo: string };
         client.send(JSON.stringify({
-          status: 'failed', retcode: 1200, echo: payload.echo, data: null, message: 'private response details',
+          status: 'failed', retcode: 1200, echo: payload.echo, data: 'hidden payload', wording: 'cache miss', message: 'test-api-secret',
         }));
       });
       await expect(server.api!.getGroupMemberInfo('100', '123'))
-        .rejects.toThrow('OneBot API error: action=get_group_member_info, retcode=1200');
+        .rejects.toThrow('OneBot API error: action=get_group_member_info, retcode=1200, detail=cache miss; ***************');
     } finally {
       await server.stop();
     }

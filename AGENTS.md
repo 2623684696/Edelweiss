@@ -18,6 +18,8 @@ Key design goals: KV Cache friendly (append-only history, static system prompt, 
 
 ## Current Progress
 
+OneBot downloads retain `get_image` / `get_file` compatibility and fall back on failed non-image lookups to chat-scoped `get_group_file_url` / `get_private_file_url` (including SnowLuma). API errors retain secret-redacted message/wording details. Telegram download paths are independent. Optional notice subtype/target fields are also represented in the wire types.
+
 Memory retention ranking uses exponential age decay with a 7-day initial stability, spaced keyed recall reinforcement (24-hour cooldown, 1.5x rounded up, capped at 180 days), and persisted reinforcement counts/anchors. Index reads do not reinforce; expired recalls never reinforce or renew TTL; content corrections reset strength. Weak retention prioritizes consolidation candidates without auto-deletion. Migration `drizzle/0035_cloudy_tattoo.sql` plus `drizzle/meta/0035_snapshot.json` adds defaults for legacy data (36 migrations total).
 
 Long-term chat memory now uses a summary-only per-turn index and explicit keyed `recall_memories` (up to 10 keys) instead of injecting full contents. Capacity is 150 entries / 2000 content characters / 60000 total characters including metadata. Optional reason/source/summary and TTL are persisted; explicit same-key writes renew TTL, recalls track use without renewal, and expired recalls expose summaries while retaining original data. Capacity errors return usage and consolidation candidates, never auto-evict. Migration `drizzle/0034_flashy_absorbing_man.sql` and its `drizzle/meta/0034_snapshot.json` add metadata non-destructively (35 migrations total). `docs/memory-observations.md` records the motivating observations and implementation boundaries.
