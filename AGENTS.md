@@ -18,8 +18,6 @@ Key design goals: KV Cache friendly (append-only history, static system prompt, 
 
 ## Current Progress
 
-Telegram sticker metadata reuses persisted display titles during replay. Unresolved titles have a five-second request timeout and five-minute failure cooldown per set; failures retain the set name as fallback rather than blocking indefinitely.
-
 Telegram `/start` identifies the deployed bot as PRiSM.
 
 `prompts/liz-chatbot-prompt.md` provides the optional Liz persona; `prompts/maimai/` contains its five worldbuilding references (blackrose, dragon, heaven, metropolis, skystreet). Local prompt backups and unrelated reference material are not part of this bundle.

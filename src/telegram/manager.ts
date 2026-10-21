@@ -187,22 +187,18 @@ export const createTelegramManager = (
   // Pack title cache: set_name → display title (in-process, never changes)
   const packTitleCache = new Map<string, string>();
   const packTitleInflight = new Map<string, Promise<string>>();
-  const packTitleRetryAfter = new Map<string, number>();
   const resolvePackTitle = async (setName: string): Promise<string> => {
     const cached = packTitleCache.get(setName);
     if (cached) return cached;
-    if ((packTitleRetryAfter.get(setName) ?? 0) > Date.now()) return setName;
     const inflight = packTitleInflight.get(setName);
     if (inflight) return await inflight;
 
     const task = (async () => {
       try {
-        const stickerSet = await bot.raw().api.getStickerSet(setName, AbortSignal.timeout(5000));
+        const stickerSet = await bot.raw().api.getStickerSet(setName);
         packTitleCache.set(setName, stickerSet.title);
-        packTitleRetryAfter.delete(setName);
         return stickerSet.title;
       } catch (err) {
-        packTitleRetryAfter.set(setName, Date.now() + 5 * 60_000);
         log.withError(err).withFields({ setName }).warn('Failed to resolve pack title');
         return setName;
       } finally {
