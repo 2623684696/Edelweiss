@@ -15,6 +15,7 @@ export { createStaySilentTool } from './stay-silent';
 export { createReactMessageTool } from './react-message';
 export { createReadImageTool } from './read-image';
 export { createAskForImageTool } from './ask-for-image';
+export { createMemoryTools } from './memory';
 export { createSleepTool } from './sleep';
 export { createEnterFocusTool } from './focus-mode';
 

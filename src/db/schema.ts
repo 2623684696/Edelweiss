@@ -14,6 +14,25 @@ export const users = sqliteTable('users', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });
 
+export const chatMemories = sqliteTable('chat_memories', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  platform: text('platform').notNull(),
+  chatId: text('chat_id').notNull(),
+  key: text('key').notNull(),
+  content: text('content').notNull(),
+  reason: text('reason'),
+  source: text('source'),
+  summary: text('summary'),
+  ttlDays: integer('ttl_days'),
+  expiresAtMs: integer('expires_at_ms'),
+  lastRecalledAtMs: integer('last_recalled_at_ms'),
+  stabilityDays: integer('stability_days').notNull().default(7),
+  reinforcementCount: integer('reinforcement_count').notNull().default(0),
+  lastReinforcedAtMs: integer('last_reinforced_at_ms'),
+  createdAtMs: integer('created_at_ms').notNull(),
+  updatedAtMs: integer('updated_at_ms').notNull(),
+}, table => [uniqueIndex('chat_memories_scope_key').on(table.platform, table.chatId, table.key)]);
+
 export const messages = sqliteTable('messages', {
   // Composite natural key: (chatId, messageId)
   chatId: text('chat_id').notNull(),

@@ -1,5 +1,5 @@
 import { getChatIds, resolveChatConfig, resolveModel } from '../../config/config';
-import { loadCompaction, loadTurnResponses, persistCompaction, persistTurnResponse } from '../../db';
+import { createChatMemoryStore, loadCompaction, loadTurnResponses, persistCompaction, persistTurnResponse } from '../../db';
 import { createDriver } from '../../driver';
 import type { Registrar } from '../registrar';
 import { TOKENS } from '../tokens';
@@ -62,6 +62,7 @@ export default function registerDriver({ get, register }: Registrar): void {
         : undefined,
       resolveModel: name => resolveModel(config, name),
       imageConversations: get(TOKENS.IMAGE_CONVERSATION_MANAGER),
+      getChatMemoryStore: (platform, chatId) => createChatMemoryStore(db, platform, chatId),
       backgroundTask: {
         startTask: (typeName, sessionId, params, intention, timeoutMs) =>
           backgroundTaskManager.startTask(typeName, sessionId, params, intention, timeoutMs),

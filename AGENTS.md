@@ -18,12 +18,16 @@ Key design goals: KV Cache friendly (append-only history, static system prompt, 
 
 ## Current Progress
 
+Memory retention ranking uses exponential age decay with a 7-day initial stability, spaced keyed recall reinforcement (24-hour cooldown, 1.5x rounded up, capped at 180 days), and persisted reinforcement counts/anchors. Index reads do not reinforce; expired recalls never reinforce or renew TTL; content corrections reset strength. Weak retention prioritizes consolidation candidates without auto-deletion. Migration `drizzle/0035_cloudy_tattoo.sql` plus `drizzle/meta/0035_snapshot.json` adds defaults for legacy data (36 migrations total).
+
+Long-term chat memory now uses a summary-only per-turn index and explicit keyed `recall_memories` (up to 10 keys) instead of injecting full contents. Capacity is 150 entries / 2000 content characters / 60000 total characters including metadata. Optional reason/source/summary and TTL are persisted; explicit same-key writes renew TTL, recalls track use without renewal, and expired recalls expose summaries while retaining original data. Capacity errors return usage and consolidation candidates, never auto-evict. Migration `drizzle/0034_flashy_absorbing_man.sql` and its `drizzle/meta/0034_snapshot.json` add metadata non-destructively (35 migrations total). `docs/memory-observations.md` records the motivating observations and implementation boundaries.
+
 | Layer | Status | Notes |
 |-------|--------|-------|
 | Telegram integration | Done | Bot + userbot, dedup, fileId merge, credential redaction, per-session ingress queue, associated-channel auto-forward detection (`is_automatic_forward` + cached group → linked-channel lookup, prompts active reply), blocking image-to-text (spoiler photos require manual `read_image`), blocking animation-to-text, blocking custom-emoji-to-text, userbot Instant View fetch/photo download with `telegram://instant-view/photo/...` references, send message reactions via bot, receive message reactions via Bot API updates with 500ms add/remove debounce, fetch reaction actors via userbot for count-only updates |
 | OneBot integration | Done | OneBot 11 reverse WebSocket server with graceful shutdown and latest-connection ownership, access-token check, message/notice adaptation, NapCat QQ display names (`get_friend_list` remark → `raw.sendRemarkName` → `raw.sendMemberName` / card → `raw.sendNickName` / nickname), QQ face descriptions, image-to-text hydration, reconnect-safe send/download PlatformAdapter, fail-closed channel routing (never falls back to Telegram), entry-time ingress timestamp capture, per-chat ordered ingress queue (bounded-retry-then-drop, fail-closed), shared (chatId, messageId) dedup across live ingress and cold-start history pull, cold-start alt-text backfill (best-effort), self-sent synthetic event injection on send |
 | Adaptation | Done | Types, conversion, dual timestamps, rich text parsing, string IDs, phantom edit filtering, platform-resolved `isMyself` identity |
-| DB / Persistence | Done | events, messages, turn_responses, turn_responses_v2, compactions, image_alt_texts, image_conversations, image_conversation_turns, subagents, subagent_messages, background_tasks, message_reaction_snapshots tables; 32 migrations |
+| DB / Persistence | Done | events, messages, turn_responses, turn_responses_v2, compactions, image_alt_texts, image_conversations, image_conversation_turns, subagents, subagent_messages, background_tasks, message_reaction_snapshots, chat_memories tables; 34 migrations |
 | Projection | Done | Reducer (message/blocked-message/edit/delete/reaction), MetaReducer (user rename detection), Immer-based immutability |
 | Rendering | Done | `render(IC, RenderParams) → RC`, XML serialization, viewport filtering, Telegram `@username` and inferred QQ numeric UID sender labels, thumbnail content pieces, passive reaction event rendering, blocked-message placeholders as deleted messages, inline `<image>` / `<animation>` / `<sticker>` / `<custom-emoji>` alt text rendering |
 | Driver | Done | Triple-provider SSE streaming (OpenAI Chat Completions via xsai + Responses API via fetch + Anthropic Messages API via fetch), unified API codec layer (provider-agnostic IR with format conversion at boundaries), platform-resolved `chat_name` / `chat_id` system-prompt prefix, lane-based tool execution (`enter_focus` prelude, parallel reads, serialized writers/messages, attachment writer barrier), Instant View-first `web_fetch` with X/Twitter mirror substitution and Jina fallback, shared `telegram://` photo reads via `read_image` / `download_file`, persistent image conversations from automatic alt text and `read_image`, main-agent-only multi-turn `ask_for_image` follow-ups with reset-on-context-overflow, Telegram-only `react_message`, semantic follow-up review for `send_message` drafts containing “确实” (preserve substantive content or react), per-step TR persistence (v2 schema), lightweight turn lifecycle (`TurnContext` + `TurnScratch` + internal `DriverFeature` hooks), mid-turn interruption, reasoning sanitization (per-provider format), reactive orchestration (alien-signals), automatic and `/compact`-triggered context compaction (LLM-based summarization with append-only history), subagent delegation with isolated helper context and mailbox communication, skills system (user-facing tool definitions loaded from markdown files), background tasks (long-running shell tasks with lifecycle management), typing-aware debounce scheduling (debounce-scoped Telegram typing presence with online heartbeat / markAsRead / supergroup channel-difference fallback), offline/online reply gating via /offline /online commands, rtk output compaction (optional argv0 rewriting + pipe fallback for bash tool) |
@@ -165,6 +169,8 @@ src/
 │   │   ├── download-file.ts  # createDownloadFileTool
 │   │   ├── read-image.ts     # createReadImageTool
 │   │   ├── ask-for-image.ts  # Main-agent multi-turn questions against a persisted image conversation
+│   │   ├── memory.ts         # Main-agent remember / forget_memory / recall_memories tools with application-bound chat scope
+│   │   ├── memory.test.ts    # Memory tool validation, mutation, failure and execution-lane tests
 │   │   ├── load-skill.ts     # createLoadSkillTool
 │   │   ├── stay-silent.ts    # createStaySilentTool
 │   │   ├── react-message.ts  # createReactMessageTool (Telegram only)
@@ -180,6 +186,7 @@ src/
 │   ├── turn-state.ts      # Explicit ChatScope / SchedulerState / TurnState / capability types for driver turn-loop refactors
 │   ├── turn-state.test.ts # Driver turn/scheduler default-state tests
 │   ├── system-prompt.test.ts # System prompt tests
+│   ├── memory-prompt.test.ts # Memory guidance, empty snapshots and XML fencing tests
 │   ├── index.test.ts      # Driver reactive scheduling/debounce tests
 │   ├── tool-providers.ts   # Capability-driven Driver tool assembly providers
 │   ├── tool-providers.test.ts # Tool-provider channel routing tests, including OneBot fail-closed send behavior
@@ -204,6 +211,8 @@ src/
 │   ├── fixture-export.ts   # Export real chat windows from persisted events into eval fixtures, optionally with TR v2
 │   └── index.ts            # Public eval harness exports
 ├── db/
+│   ├── chat-memory.ts       # Platform + chat-scoped persistent memory store, bounded transactional upserts and deletion
+│   ├── chat-memory.test.ts  # Migration, isolation, restart persistence and capacity regression tests
 │   ├── client.ts           # Database init (better-sqlite3 + Drizzle), WAL mode
 │   ├── schema.ts           # Drizzle schema: users, messages, events, turnResponses, turnResponsesV2, compactions, imageAltTexts, imageConversations, imageConversationTurns, subagents, subagentMessages, backgroundTasks, messageReactionSnapshots tables
 │   ├── persistence.ts      # CRUD: events/TRs/compactions, image alt-text cache and conversation stores, subagent lifecycle, background task persistence
@@ -302,6 +311,19 @@ Top-level directories:
   - `telegram-typing-events.md` — Telegram typing event research
   - `unified-api-integration.md` — unified API integration design
 - `dcp-updates.md` — implementation deltas from the original RFC
+
+### Long-term Chat Memory
+
+Long-term memory is model-selected, not an automatic transcript archive or compaction summary. Production Driver scopes bind `createChatMemoryStore(db, platform, chatId)` in the composition root. The `chat_memories` table (migration `0033_chat_memories.sql`, with generated snapshot/journal metadata) has a unique `(platform, chat_id, key)` index. Group IDs and platforms are both part of every read, upsert and delete; model tool arguments cannot select a different chat. The main agent has `canManageMemory`; subagents receive none of these tools or automatic memory snapshots.
+
+- `remember({ key, content })` creates or updates one stable topic, with optional reason, source, summary and TTL metadata. For member-specific facts, the prompt asks the model to include stable user IDs. Explicit same-key writes can renew TTL and refresh retention anchors.
+- `forget_memory({ key })` explicitly removes an entry; repeated deletion is harmless.
+- `recall_memories({})` reads the current scoped summary index; keyed recalls retrieve up to 10 entries, including changes during the current turn.
+- Memory writes run in the writer lane; explicit recall is serial so it sees completed writes from the same step. Successful or failed tools allow a follow-up, so the model can handle capacity errors before claiming success.
+- Each scope has at most 150 entries, 64 characters per key, 2000 per content value and 60000 total characters including metadata. Limits are enforced inside an immediate SQLite transaction; no silent eviction occurs. The model may consolidate or delete obsolete facts when full.
+- Each main turn loads only this chat's summary index into `primary-late-binding.velin.md`, with XML-escaped keys and summaries. This leaves the static system prefix unchanged when memories change. Memories survive service restarts and context compaction; compaction does not write them.
+- `primary-system.velin.md` instructs the model to decide autonomously whether a fact is durable, avoid secrets/transient chatter/unverified claims, honor corrections and forgetting requests, and treat stored content as data rather than instructions. Memory-only work need not produce a group message. `IDENTITY.velin.md` is not changed by this feature.
+- Tool-level scope is enforced by closures and SQL predicates. The bot's existing general-purpose shell is not a filesystem security boundary; prompts prohibit using it to bypass memory isolation.
 
 ### Type Ownership
 

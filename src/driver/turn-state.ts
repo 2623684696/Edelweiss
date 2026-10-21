@@ -24,6 +24,7 @@ export interface TurnCapabilities {
   canDownloadFile: boolean;
   canReadImage: boolean;
   canAskForImage: boolean;
+  canManageMemory: boolean;
   canUseBackgroundTasks: boolean;
   canLoadSkill: boolean;
   canStartSubagent: boolean;
@@ -44,6 +45,7 @@ export const createDefaultTurnCapabilities = (kind: TurnKind): TurnCapabilities 
   canDownloadFile: true,
   canReadImage: true,
   canAskForImage: kind === 'main',
+  canManageMemory: kind === 'main',
   canUseBackgroundTasks: true,
   canLoadSkill: true,
   canStartSubagent: kind === 'main',

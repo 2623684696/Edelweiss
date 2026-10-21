@@ -2,6 +2,7 @@ import type { Logger } from '@guiiai/logg';
 
 import type { ActiveTaskInfo } from '../../background-task/types';
 import type { ResolvedChatConfig } from '../../config/config';
+import type { ChatMemoryStore } from '../../db/chat-memory';
 import type { RenderedContext } from '../../rendering/types';
 import type { createDriverScheduler } from '../scheduler';
 import type { SkillInfo } from '../skills';
@@ -48,4 +49,5 @@ export interface MainTurnFeatureDeps {
   getAllowedReactionEmojis?: (chatId: string) => string[];
   getActiveBackgroundTasks: (sessionId: string) => ActiveTaskInfo[];
   nowString: () => string;
+  memory?: ChatMemoryStore;
 }

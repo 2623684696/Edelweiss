@@ -2,7 +2,10 @@ import { signal } from 'alien-signals';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createMainTurnFeatures } from './main';
+import { createPromptFeature } from './prompt';
 import type { MainTurnFeatureDeps } from './types';
+import { createTurnContext } from '../turn-features';
+import { createDefaultTurnCapabilities, type TurnState } from '../turn-state';
 
 const createLog = (): MainTurnFeatureDeps['log'] => {
   const logger = {
@@ -122,6 +125,36 @@ const createDeps = (): MainTurnFeatureDeps => ({
 });
 
 describe('createMainTurnFeatures', () => {
+  it('reloads scoped memory each turn without changing the static system prefix', async () => {
+    const deps = createDeps();
+    deps.memory = {
+      list: vi.fn()
+        .mockReturnValueOnce([{ key: 'user:123:preference', content: 'Prefers tea', updatedAtMs: 123 }])
+        .mockReturnValueOnce([]),
+      remember: vi.fn(),
+      recall: vi.fn(),
+      forget: vi.fn(),
+    };
+    const feature = createPromptFeature(deps);
+    const context = () => createTurnContext({
+      abortController: new AbortController(),
+      capabilities: createDefaultTurnCapabilities('main'),
+      reactionEmojis: [], trs: [], rcAtStart: [], entries: [], system: '',
+    } as unknown as TurnState);
+    const first = context();
+    await feature.preparePrompt!(first);
+    expect(JSON.stringify(first.turn.entries)).toContain('Prefers tea');
+    expect(first.turn.system).toContain('`remember`');
+    expect(first.turn.system).not.toContain('Prefers tea');
+    const second = context();
+    await feature.preparePrompt!(second);
+    expect(JSON.stringify(second.turn.entries)).not.toContain('Prefers tea');
+    expect(JSON.stringify(second.turn.entries)).toContain('<chat-memories>');
+    expect(second.turn.system).toBe(first.turn.system);
+    expect(deps.memory.list).toHaveBeenCalledTimes(2);
+    expect(deps.memory.remember).not.toHaveBeenCalled();
+  }, 15000);
+
   it('keeps the fixed main-turn feature order visible in one place', () => {
     expect(createMainTurnFeatures(createDeps()).map(feature => feature.name)).toEqual([
       'context',

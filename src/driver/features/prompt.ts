@@ -15,6 +15,7 @@ export const createPromptFeature = (deps: MainTurnFeatureDeps): DriverFeature =>
       allSkills: deps.allSkills,
       reactionEmojis: turn.reactionEmojis,
       capabilities: turn.capabilities,
+      hasMemoryTools: Boolean(deps.memory),
     }));
 
     const isInterrupted = wasToolLoopInterrupted(turn.trs);
@@ -34,6 +35,8 @@ export const createPromptFeature = (deps: MainTurnFeatureDeps): DriverFeature =>
       recentSendMessageHumanLikenessXml: ctx.scratch.recentSendMessageHumanLikenessXml,
       isInterrupted,
       activeBackgroundTasks: deps.getActiveBackgroundTasks(deps.chatId),
+      memories: deps.memory?.list(),
+      hasMemoryTools: Boolean(deps.memory),
     }));
   },
 });

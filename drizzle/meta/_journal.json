@@ -232,6 +232,27 @@
       "when": 1786683823447,
       "tag": "0032_create_image_conversations",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1791560742193,
+      "tag": "0033_chat_memories",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1792136768664,
+      "tag": "0034_flashy_absorbing_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1792157607603,
+      "tag": "0035_cloudy_tattoo",
+      "breakpoints": true
     }
   ]
 }

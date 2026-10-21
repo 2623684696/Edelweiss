@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { renderMarkdownString } from '@velin-dev/core';
 
+import { memoryIndex, memoryUsage, type ChatMemory } from '../db/chat-memory';
 import { cleanVelinOutput, renderPromptTemplate } from '../prompt-template';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -33,6 +34,7 @@ export interface SystemPromptParams {
   hasSubagentTools?: boolean;
   hasReactTool?: boolean;
   hasAskForImageTool?: boolean;
+  hasMemoryTools?: boolean;
   availableReactionEmojis?: string[];
   availableSkills?: AvailableSkillPromptInfo[];
   forceToolCall?: boolean | 'api' | 'local';
@@ -50,6 +52,7 @@ export const renderSystemPrompt = async (params: SystemPromptParams) => {
     hasSubagentTools: params.hasSubagentTools,
     hasReactTool: params.hasReactTool,
     hasAskForImageTool: params.hasAskForImageTool,
+    hasMemoryTools: params.hasMemoryTools,
     availableReactionEmojis: params.availableReactionEmojis,
     availableSkills: params.availableSkills,
     forceToolCall: params.forceToolCall !== false && params.forceToolCall !== undefined,
@@ -68,8 +71,22 @@ export const renderSubagentSystemPrompt = async (params: {
   return cleanVelinOutput(rendered);
 };
 
+const renderMemorySnapshot = (memories: ChatMemory[]): string => {
+  const usage = memoryUsage(memories);
+  const escapeXml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  return [
+    '<chat-memories>',
+    `<usage entries="${usage.entries}" characters="${usage.characters}" entry-limit="${usage.limits.entries}" character-limit="${usage.limits.totalCharacters}"/>`,
+    ...memoryIndex(memories).map(memory => `<memory key="${escapeXml(memory.key)}" updated-at-ms="${memory.updatedAtMs}" expired="${memory.expired}" retention="${memory.retention.toFixed(3)}">${escapeXml(memory.summary)}</memory>`),
+    '</chat-memories>',
+  ].join('\n');
+};
+
 export const renderLateBindingPrompt = async (params: {
   timeNow: string;
+  memories?: ChatMemory[];
+  hasMemoryTools?: boolean;
   isMentioned?: boolean;
   isReplied?: boolean;
   isAssociatedChannelPost?: boolean;
@@ -78,11 +95,17 @@ export const renderLateBindingPrompt = async (params: {
   isInterrupted?: boolean;
   forceToolCall?: boolean | 'api' | 'local';
 }) => {
+  const { memories, ...templateParams } = params;
   const { rendered } = await renderMarkdownString(lateBindingTemplate, {
-    ...params,
+    ...templateParams,
     forceToolCall: params.forceToolCall !== false && params.forceToolCall !== undefined,
   }, basePath);
-  return cleanVelinOutput(rendered);
+  // Insert serialized data after Velin rendering, like system-file placeholders,
+  // so Markdown escaping cannot corrupt XML entities or collapse memory lines.
+  const cleaned = cleanVelinOutput(rendered);
+  return params.hasMemoryTools
+    ? cleaned.replace('CHAT_MEMORIES_SNAPSHOT', () => renderMemorySnapshot(memories ?? []))
+    : cleaned;
 };
 
 export const renderCompactionUserInstruction = async () => {

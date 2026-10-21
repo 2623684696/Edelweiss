@@ -54,6 +54,17 @@ const deps = (platform: 'telegram' | 'onebot', sendMessage: CapabilityToolProvid
 });
 
 describe('createToolsForCapabilities send routing', () => {
+  it('offers scoped memory tools only to main turns with a store', () => {
+    const toolDeps = deps('onebot', vi.fn());
+    const names = (kind: 'main' | 'subagent') => createToolsForCapabilities(toolDeps, createDefaultTurnCapabilities(kind))
+      .map(tool => tool.function.name);
+    expect(names('main')).not.toContain('remember');
+    toolDeps.memory = { list: vi.fn(() => []), recall: vi.fn(() => []), remember: vi.fn(), forget: vi.fn() };
+    expect(names('main')).toEqual(expect.arrayContaining(['remember', 'forget_memory', 'recall_memories']));
+    expect(names('subagent')).not.toContain('remember');
+    expect(names('subagent')).not.toContain('forget_memory');
+    expect(names('subagent')).not.toContain('recall_memories');
+  });
   it('refuses Telegram fallback for a OneBot chat without an adapter', async () => {
     const telegramSend = vi.fn(async () => ({ messageId: 1, date: 1 }));
     const capabilities = createDefaultTurnCapabilities('main');

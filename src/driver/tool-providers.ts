@@ -4,12 +4,13 @@ import { resolve } from 'node:path';
 import type { Logger } from '@guiiai/logg';
 
 import type { SkillInfo } from './skills';
-import { createAskForImageTool, createBashTool, createAttachmentDownloader, createDownloadFileTool, createKillTaskTool, createReadImageTool, createReadTaskOutputTool, createSendMessageTool, createSleepTool, createWebFetchTool, createWebSearchTool, createStaySilentTool, createReactMessageTool, createEnterFocusTool } from './tools';
+import { createAskForImageTool, createBashTool, createAttachmentDownloader, createDownloadFileTool, createKillTaskTool, createReadImageTool, createReadTaskOutputTool, createSendMessageTool, createSleepTool, createWebFetchTool, createWebSearchTool, createStaySilentTool, createReactMessageTool, createEnterFocusTool, createMemoryTools } from './tools';
 import type { CahciuaTool, SendMessageAttachment, SendMessageTurnFlags } from './tools';
 import type { DriverSignal, TurnCapabilities, TurnState } from './turn-state';
 import type { PlatformAdapter } from './types';
 import { createWebFetcher } from './web-fetch';
 import type { RuntimeConfig, ResolvedChatConfig } from '../config/config';
+import type { ChatMemoryStore } from '../db/chat-memory';
 import type { LlmEndpoint } from '../llm/types';
 import type { ImageConversationManager } from '../media/image-conversation';
 import { renderImageToTextSystemPrompt } from '../media/image-to-text-prompt';
@@ -31,6 +32,7 @@ export interface CapabilityToolProviderDeps {
   sendReaction?: (chatId: string, messageId: number, emoji: string) => Promise<void>;
   resolveModel: (name: string) => LlmEndpoint;
   imageConversations: ImageConversationManager;
+  memory?: ChatMemoryStore;
   backgroundTask: {
     startTask: (typeName: string, sessionId: string, params: unknown, intention: string | undefined, timeoutMs: number) => number;
     killTask: (taskId: number) => { ok: boolean; error?: string };
@@ -212,5 +214,6 @@ export const createToolsForCapabilities = (
     ...createReadImageTools(),
     ...createAskForImageTools(),
     ...createBackgroundTaskTools(),
+    ...(capabilities.canManageMemory && deps.memory ? createMemoryTools(deps.memory) : []),
   ];
 };

@@ -22,6 +22,7 @@ import type { ChatScope, TurnState } from './turn-state';
 import type { CompactionSessionMeta, DriverConfig, ManualCompactionResult, PlatformAdapter, TurnResponseV2 } from './types';
 import type { ActiveTaskInfo } from '../background-task/types';
 import type { RuntimeConfig } from '../config/config';
+import type { ChatMemoryStore } from '../db/chat-memory';
 import type { LlmEndpoint } from '../llm/types';
 import type { ImageConversationManager } from '../media/image-conversation';
 import type { RenderedContext } from '../rendering/types';
@@ -65,6 +66,7 @@ export const createDriver = (config: DriverConfig, deps: {
   sendReaction?: (chatId: string, messageId: number, emoji: string) => Promise<void>;
   resolveModel: (name: string) => LlmEndpoint;
   imageConversations: ImageConversationManager;
+  getChatMemoryStore?: (platform: string, chatId: string) => ChatMemoryStore;
   backgroundTask: {
     startTask: (typeName: string, sessionId: string, params: unknown, intention: string | undefined, timeoutMs: number) => number;
     killTask: (taskId: number) => { ok: boolean; error?: string };
@@ -118,6 +120,7 @@ export const createDriver = (config: DriverConfig, deps: {
 
     // Resolve per-chat config once per scope
     const chatConfig = config.resolveChatConfig(chatId);
+    const memory = deps.getChatMemoryStore?.(chatConfig.platform, chatId);
     let chatName: Promise<string> | undefined;
     const getChatName = () => {
       chatName ??= (deps.getChatName?.(chatId) ?? Promise.resolve(chatId))
@@ -202,6 +205,7 @@ export const createDriver = (config: DriverConfig, deps: {
       sendReaction: deps.sendReaction,
       resolveModel: deps.resolveModel,
       imageConversations: deps.imageConversations,
+      memory,
       backgroundTask: {
         startTask: deps.backgroundTask.startTask,
         killTask: deps.backgroundTask.killTask,
@@ -336,6 +340,7 @@ export const createDriver = (config: DriverConfig, deps: {
             getAllowedReactionEmojis: deps.getAllowedReactionEmojis,
             getActiveBackgroundTasks: deps.backgroundTask.getActiveTasks,
             nowString: localTimeNow,
+            memory,
           });
           await runMainTurn(turn, features);
         } catch (err) {
@@ -430,6 +435,7 @@ export const createDriver = (config: DriverConfig, deps: {
           allSkills,
           reactionEmojis,
           capabilities,
+          hasMemoryTools: Boolean(memory),
         }));
         const tools = [
           ...createCapabilityTools(capabilities, reactionEmojis, { wasLengthLimited: false, inFocusMode: false }),
