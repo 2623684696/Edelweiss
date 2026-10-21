@@ -316,6 +316,24 @@ export const adaptOneBotMessage = async (
 
 export const adaptOneBotNotice = (event: OneBotNoticeEvent, meta: OneBotIngressMeta): CanonicalIMEvent | null => {
   switch (event.notice_type) {
+  case 'notify': {
+    if (event.sub_type !== 'poke' || event.group_id == null || event.user_id == null
+      || event.target_id !== event.self_id || event.user_id === event.self_id) return null;
+    return {
+      type: 'service',
+      chatId: String(event.group_id),
+      actor: { id: String(event.user_id), displayName: `user:${event.user_id}`, isBot: false },
+      receivedAtMs: meta.receivedAtMs,
+      timestampSec: event.time,
+      utcOffsetMin: meta.utcOffsetMin,
+      action: {
+        action: 'poke',
+        target: { id: String(event.self_id), displayName: `user:${event.self_id}`, isBot: true },
+        targetIsMyself: true,
+      },
+    };
+  }
+
   case 'recall':
   case 'group_recall':
   {

@@ -122,6 +122,7 @@ export interface ServiceActionChatPhotoDeleted { action: 'chat_photo_deleted' }
 export interface ServiceActionMessagePinned { action: 'message_pinned'; messageId: string }
 
 export type ServiceAction =
+  | { action: 'poke'; target: CanonicalUser; targetIsMyself: boolean }
   | ServiceActionMembersJoined
   | ServiceActionMemberLeft
   | ServiceActionChatRenamed

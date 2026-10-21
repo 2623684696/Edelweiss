@@ -210,6 +210,8 @@ const renderSystemEvent = (event: ICSystemEvent, contactNames?: Map<string, stri
   const actorAttr = 'actor' in event && event.actor ? ` actor="${escapeXml(formatSender(event.actor, contactNames))}"` : '';
 
   switch (event.kind) {
+  case 'poke':
+    return `<event type="poke" t="${t}"${actorAttr} target="${escapeXml(formatSender(event.target, contactNames))}" target_is_myself="${event.targetIsMyself}"/>`;
   case 'user_renamed':
     return `<event type="name_change" t="${t}" from_name="${escapeXml(formatSender(event.oldUser, contactNames))}" to_name="${escapeXml(formatSender(event.newUser, contactNames))}"/>`;
 

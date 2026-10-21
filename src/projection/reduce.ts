@@ -192,6 +192,9 @@ const reduceService = (draft: IntermediateContext, event: CanonicalServiceEvent)
   const { action } = event;
 
   switch (action.action) {
+  case 'poke':
+    draft.nodes.push({ ...base, kind: 'poke', target: action.target, targetIsMyself: action.targetIsMyself });
+    break;
   case 'members_joined':
     draft.nodes.push({ ...base, kind: 'members_joined', members: action.members });
     break;

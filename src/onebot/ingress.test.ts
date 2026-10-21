@@ -108,9 +108,30 @@ const meta = () => ({ receivedAtMs: Date.now(), utcOffsetMin: 0 });
 // transformMessage still calls getApi() and throws if it returns null.
 const stubApi = () => ({
   getFriendRemark: () => Promise.resolve(undefined),
+  getGroupMemberInfo: (_chatId: string, userId: string) => Promise.resolve({ displayName: userId }),
 } as unknown as NonNullable<ReturnType<OneBotIngressDeps['getApi']>>);
 
 describe('createOneBotIngress', () => {
+  it.each([false, true])('handles poke notices with blocked=%s', async blocked => {
+    const persistEvent = vi.fn();
+    const onDriverEvent = vi.fn();
+    const ingress = createOneBotIngress(baseDeps({
+      isBlocked: (_chatId, senderId) => blocked && senderId === '42',
+      persistEvent,
+      onDriverEvent,
+    }));
+    ingress.enqueue({
+      post_type: 'notice', notice_type: 'notify', sub_type: 'poke',
+      time: 123, self_id: 1, group_id: 100, user_id: 42, target_id: 1,
+    }, meta());
+    // A following notice is a barrier proving the poke has committed or been skipped.
+    ingress.enqueue(noticeRecall(100, 7), meta());
+    await vi.waitFor(() => expect(persistEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'delete' })));
+    expect(persistEvent).toHaveBeenCalledTimes(blocked ? 1 : 2);
+    expect(onDriverEvent).toHaveBeenCalledTimes(blocked ? 1 : 2);
+    if (!blocked) expect(persistEvent.mock.calls[0]![0]).toMatchObject({ type: 'service', action: { action: 'poke' } });
+  });
+
   it('intercepts /compact and reports the result without persisting the command', async () => {
     const persistEvent = vi.fn();
     const requestCompaction = vi.fn(async () => ({
@@ -125,7 +146,9 @@ describe('createOneBotIngress', () => {
       sendPlatformMessage,
     }));
 
-    ingress.enqueue(groupMessage(100, 7, '/compact'), meta());
+    const message = groupMessage(100, 7, '/compact');
+    message.message.unshift({ type: 'at', data: { qq: '1' } });
+    ingress.enqueue(message, meta());
 
     await vi.waitFor(() => expect(sendPlatformMessage).toHaveBeenCalledTimes(2));
     expect(sendPlatformMessage.mock.calls).toEqual([
@@ -134,6 +157,52 @@ describe('createOneBotIngress', () => {
     ]);
     expect(requestCompaction).toHaveBeenCalledWith('100');
     expect(persistEvent).not.toHaveBeenCalled();
+  });
+
+  it.each(['/offline', '/online'])('executes %s with a bot mention', async command => {
+    const setOfflineMode = vi.fn();
+    const persistEvent = vi.fn();
+    const sendPlatformMessage = vi.fn(async () => {});
+    const ingress = createOneBotIngress(baseDeps({
+      getApi: stubApi,
+      setOfflineMode,
+      persistEvent,
+      sendPlatformMessage,
+    }));
+    const message = groupMessage(100, 7, ` ${command} `);
+    message.message.push({ type: 'at', data: { qq: '1' } });
+    ingress.enqueue(message, meta());
+
+    await vi.waitFor(() => expect(sendPlatformMessage).toHaveBeenCalledOnce());
+    expect(setOfflineMode).toHaveBeenCalledWith('100', command === '/offline');
+    expect(persistEvent).not.toHaveBeenCalled();
+  });
+
+  it.each(['/offline', '/online', '/compact'])('keeps %s as a normal message without a bot mention', async command => {
+    const persistEvent = vi.fn();
+    const onDriverEvent = vi.fn();
+    const setOfflineMode = vi.fn();
+    const requestCompaction = vi.fn();
+    const sendPlatformMessage = vi.fn();
+    const ingress = createOneBotIngress(baseDeps({
+      getApi: stubApi,
+      persistEvent,
+      onDriverEvent,
+      setOfflineMode,
+      requestCompaction,
+      sendPlatformMessage,
+    }));
+    for (const [index, target] of [undefined, '99', 'all'].entries()) {
+      const message = groupMessage(100, index, command);
+      if (target) message.message.unshift({ type: 'at', data: { qq: target } });
+      ingress.enqueue(message, meta());
+    }
+
+    await vi.waitFor(() => expect(onDriverEvent).toHaveBeenCalledTimes(3));
+    expect(persistEvent).toHaveBeenCalledTimes(3);
+    expect(setOfflineMode).not.toHaveBeenCalled();
+    expect(requestCompaction).not.toHaveBeenCalled();
+    expect(sendPlatformMessage).not.toHaveBeenCalled();
   });
 
   it('commits notice events through the queue and applies ingress meta', async () => {

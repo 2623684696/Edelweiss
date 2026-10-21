@@ -18,6 +18,8 @@ Key design goals: KV Cache friendly (append-only history, static system prompt, 
 
 ## Current Progress
 
+OneBot commands require an explicit @mention of the bot; only that mention is removed before matching `/offline`, `/online`, or `/compact`. Other messages follow the normal pipeline. Group `notify/poke` notices targeting the bot become `service/poke` events rendered with actor and target metadata; they do not wake offline chats. Self-originated, private, other-target and blocked-actor pokes are ignored.
+
 OneBot downloads retain `get_image` / `get_file` compatibility and fall back on failed non-image lookups to chat-scoped `get_group_file_url` / `get_private_file_url` (including SnowLuma). API errors retain secret-redacted message/wording details. Telegram download paths are independent. Optional notice subtype/target fields are also represented in the wire types.
 
 Memory retention ranking uses exponential age decay with a 7-day initial stability, spaced keyed recall reinforcement (24-hour cooldown, 1.5x rounded up, capped at 180 days), and persisted reinforcement counts/anchors. Index reads do not reinforce; expired recalls never reinforce or renew TTL; content corrections reset strength. Weak retention prioritizes consolidation candidates without auto-deletion. Migration `drizzle/0035_cloudy_tattoo.sql` plus `drizzle/meta/0035_snapshot.json` adds defaults for legacy data (36 migrations total).

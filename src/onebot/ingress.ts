@@ -159,6 +159,9 @@ export const createOneBotIngress = (deps: OneBotIngressDeps): OneBotIngress => {
       if (item.dropped || !item.event) return;
       const event = item.event;
 
+      if (event.type === 'service' && event.action.action === 'poke'
+        && deps.isBlocked(event.chatId, event.actor?.id)) return;
+
       if (event.type === 'message') {
         if (deps.isBlocked(event.chatId, event.sender?.id)) {
           const blocked = deps.toBlockedMessageEvent(event);
@@ -169,7 +172,11 @@ export const createOneBotIngress = (deps: OneBotIngressDeps): OneBotIngress => {
           return;
         }
 
-        const text = contentToPlainText(event.content).trim();
+        const selfId = String(item.raw.self_id);
+        const mentionsBot = event.content.some(node => node.type === 'mention' && node.userId === selfId);
+        const text = mentionsBot
+          ? contentToPlainText(event.content.filter(node => node.type !== 'mention' || node.userId !== selfId)).trim()
+          : '';
         if (text === '/offline' || text === '/online') {
           const off = text === '/offline';
           deps.setOfflineMode(event.chatId, off);

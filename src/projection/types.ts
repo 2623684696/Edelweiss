@@ -116,6 +116,16 @@ export interface ICReactionAddedEvent {
 }
 
 export type ICSystemEvent =
+  | {
+    type: 'system_event';
+    kind: 'poke';
+    receivedAtMs: number;
+    timestampSec: number;
+    utcOffsetMin: number;
+    actor?: CanonicalUser;
+    target: CanonicalUser;
+    targetIsMyself: boolean;
+  }
   | ICUserRenamedEvent
   | ICMembersJoinedEvent
   | ICMemberLeftEvent

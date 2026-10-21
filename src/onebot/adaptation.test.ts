@@ -1,14 +1,43 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { adaptOneBotMessage, adaptOneBotSender, adaptUser } from './adaptation';
+import { adaptOneBotMessage, adaptOneBotNotice, adaptOneBotSender, adaptUser } from './adaptation';
 import type { OneBotApiClient } from './server';
-import type { OneBotMessageEvent } from './types';
+import type { OneBotMessageEvent, OneBotNoticeEvent } from './types';
 import { latestExternalEventMs, latestInterruptingExternalEventMs } from '../driver/context';
 import { createEmptyIC, reduce } from '../projection';
 import type { IntermediateContext } from '../projection';
 import { render } from '../rendering';
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe('group poke notices', () => {
+  const poke: OneBotNoticeEvent = {
+    post_type: 'notice', notice_type: 'notify', sub_type: 'poke',
+    time: 123, self_id: 1, group_id: 100, user_id: 42, target_id: 1,
+  };
+  const meta = { receivedAtMs: 124000, utcOffsetMin: 540 };
+
+  it('preserves a poke through adaptation, projection and rendering without waking offline chats', () => {
+    const event = adaptOneBotNotice(poke, meta)!;
+    expect(event).toMatchObject({ type: 'service', chatId: '100', actor: { id: '42' }, timestampSec: 123, ...meta });
+    const rc = render(reduce(createEmptyIC('100'), event), { botUserId: 'different-platform-id' });
+    expect(rc).toHaveLength(1);
+    expect(rc[0]).toMatchObject({ receivedAtMs: 124000 });
+    expect(rc[0]!.mentionsMe).toBeUndefined();
+    expect(rc[0]!.repliesToMe).toBeUndefined();
+    expect(rc[0]!.isPassiveEvent).toBeUndefined();
+    expect(rc[0]!.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('type="poke"') });
+    expect(rc[0]!.content[0]).toMatchObject({ text: expect.stringContaining('target_is_myself="true"') });
+    expect(rc[0]!.content[0]).toMatchObject({ text: expect.stringContaining('actor="user:42 (42)"') });
+  });
+
+  it.each<Partial<OneBotNoticeEvent>>([
+    { sub_type: 'lucky_king' }, { target_id: 99 }, { target_id: undefined },
+    { user_id: 1 }, { user_id: undefined }, { group_id: undefined },
+  ])('ignores unsupported or non-external bot pokes: %j', overrides => {
+    expect(adaptOneBotNotice({ ...poke, ...overrides }, meta)).toBeNull();
+  });
+});
 
 describe('adaptUser', () => {
   it('prefers remark over group card and nickname', () => {
