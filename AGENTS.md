@@ -18,6 +18,8 @@ Key design goals: KV Cache friendly (append-only history, static system prompt, 
 
 ## Current Progress
 
+The bundled `skills/maimai-alias/SKILL.md` skill queries LXNS public song/alias lists without credentials. `scripts/query.mjs` joins and searches titles, aliases and IDs with bounded JSON output; `scripts/query.test.mjs` provides offline regression checks. Skills are discovered when a chat scope is created, not hot-reloaded.
+
 OneBot commands require an explicit @mention of the bot; only that mention is removed before matching `/offline`, `/online`, or `/compact`. Other messages follow the normal pipeline. Group `notify/poke` notices targeting the bot become `service/poke` events rendered with actor and target metadata; they do not wake offline chats. Self-originated, private, other-target and blocked-actor pokes are ignored.
 
 OneBot downloads retain `get_image` / `get_file` compatibility and fall back on failed non-image lookups to chat-scoped `get_group_file_url` / `get_private_file_url` (including SnowLuma). API errors retain secret-redacted message/wording details. Telegram download paths are independent. Optional notice subtype/target fields are also represented in the wire types.
