@@ -10,6 +10,10 @@ export const resolveStickerSetMetadata = async (
   const stickerSetId = metadata?.stickerSetId ?? metadata?.stickerSetName;
   if (!stickerSetId) return {};
 
+  // A persisted display title needs no network refresh during history replay.
+  if (metadata?.stickerSetId && metadata.stickerSetName && metadata.stickerSetName !== stickerSetId)
+    return { stickerSetId, stickerSetName: metadata.stickerSetName };
+
   return {
     stickerSetId,
     stickerSetName: await resolvePackTitle(stickerSetId),
