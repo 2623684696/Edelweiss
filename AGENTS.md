@@ -18,6 +18,8 @@ Key design goals: KV Cache friendly (append-only history, static system prompt, 
 
 ## Current Progress
 
+Telegram `/start` identifies the deployed bot as PRiSM.
+
 `prompts/liz-chatbot-prompt.md` provides the optional Liz persona; `prompts/maimai/` contains its five worldbuilding references (blackrose, dragon, heaven, metropolis, skystreet). Local prompt backups and unrelated reference material are not part of this bundle.
 
 The bundled `skills/maimai-alias/SKILL.md` skill queries LXNS public song/alias lists without credentials. `scripts/query.mjs` joins and searches titles, aliases and IDs with bounded JSON output; `scripts/query.test.mjs` provides offline regression checks. Skills are discovered when a chat scope is created, not hot-reloaded.

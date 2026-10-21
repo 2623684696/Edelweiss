@@ -94,7 +94,7 @@ export const createBotClient = (options: BotClientOptions, logger: Logger): BotC
   };
 
   bot.command('start', async ctx => {
-    await ctx.reply('Edelweiss is running.');
+    await ctx.reply('PRiSM is running.');
   });
 
   bot.catch(err => {
