@@ -1,6 +1,7 @@
 import type { Logger } from '@guiiai/logg';
 
 import { parseSSEStream } from './sse';
+import type { ToolChoice } from './tool-choice';
 import type {
   CacheControl,
   MessagesAssistantContentBlock,
@@ -25,9 +26,8 @@ export interface StreamingMessagesParams {
   system?: string | MessagesSystemBlock[];
   messages: MessagesMessage[];
   tools?: AnthropicTool[];
-  forceToolCall?: boolean | 'api' | 'local';
-  /** Overrides forceToolCall. 'none' forbids tool calls (used by compaction). */
-  toolChoice?: 'none';
+  toolChoice?: ToolChoice;
+  onToolCallStart?: () => void;
   maxTokens?: number;
   timeoutSec?: number;
   extraBody?: Record<string, unknown>;
@@ -73,14 +73,9 @@ export const streamingMessages = async (params: StreamingMessagesParams): Promis
   const timeout = params.timeoutSec
     ? setTimeout(() => abortController.abort(new Error(`messages request timed out after ${params.timeoutSec}s`)), params.timeoutSec * 1000)
     : undefined;
-  // If external signal triggers, abort the request
-  if (params.signal) {
-    if (params.signal.aborted) {
-      abortController.abort(new Error('Request aborted before start'));
-    } else {
-      params.signal.addEventListener('abort', () => abortController.abort(params.signal!.reason), { once: true });
-    }
-  }
+  const onAbort = () => abortController.abort(params.signal!.reason);
+  if (params.signal?.aborted) onAbort();
+  else params.signal?.addEventListener('abort', onAbort, { once: true });
 
   try {
     const body = JSON.stringify({
@@ -91,7 +86,7 @@ export const streamingMessages = async (params: StreamingMessagesParams): Promis
       ...(params.tools && params.tools.length > 0 ? { tools: params.tools } : {}),
       ...(params.toolChoice === 'none'
         ? { tool_choice: { type: 'none' } }
-        : params.forceToolCall === true || params.forceToolCall === 'api'
+        : params.toolChoice === 'force'
           ? { tool_choice: { type: 'any' } }
           : {}),
       ...(params.extraBody ?? {}),
@@ -153,6 +148,7 @@ export const streamingMessages = async (params: StreamingMessagesParams): Promis
       case 'content_block_start': {
         const block = { ...event.content_block };
         if (block.type === 'tool_use') {
+          params.onToolCallStart?.();
           flushTextBuf();
           flushReasoningBuf();
           toolJsonBuffers.set(event.index, '');
@@ -209,7 +205,7 @@ export const streamingMessages = async (params: StreamingMessagesParams): Promis
       }
     };
 
-    await parseSSEStream<SSEEvent>(stream, processEvent);
+    await parseSSEStream<SSEEvent>(stream, processEvent, abortController.signal);
     flushTextBuf();
     flushReasoningBuf();
 
@@ -229,6 +225,7 @@ export const streamingMessages = async (params: StreamingMessagesParams): Promis
       stop_reason: stopReason,
     };
   } finally {
+    params.signal?.removeEventListener('abort', onAbort);
     if (timeout) clearTimeout(timeout);
   }
 };

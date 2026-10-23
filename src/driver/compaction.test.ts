@@ -26,6 +26,6 @@ describe('compaction cached prefix', () => {
     expect(result.summary).toBe('summary');
     expect(callLlm).toHaveBeenCalledWith(expect.anything(), [
       { kind: 'message', role: 'user', parts: [{ kind: 'text', text: instruction }] },
-    ], 'main system', tools, expect.objectContaining({ toolChoice: 'none' }));
+    ], 'main system', tools, expect.objectContaining({ toolChoice: 'local-none' }));
   });
 });

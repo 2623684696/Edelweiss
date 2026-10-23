@@ -72,7 +72,8 @@ export const callDescriptionLlm = async (params: {
     ...(model.apiFormat ? { apiFormat: model.apiFormat } : {}),
     ...(model.timeoutSec ? { timeoutSec: model.timeoutSec } : {}),
     ...(model.extraBody ? { extraBody: model.extraBody } : {}),
-    ...(model.forceToolCall ? { forceToolCall: model.forceToolCall } : {}),
+    ...(model.toolChoice ? { toolChoice: model.toolChoice } : {}),
+    localForceMaxRetries: model.localForceMaxRetries,
   };
 
   const result = await callLlm(

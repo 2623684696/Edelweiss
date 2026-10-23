@@ -67,6 +67,7 @@ const createDeps = (): MainTurnFeatureDeps => ({
       typingExemptUsers: [],
     },
     blockedUserIds: [],
+    disabledReactions: ['😁', '🖕🏻', '😇'],
     humanLikeness: {
       trailingPeriod: false,
       denseClausePunctuation: false,

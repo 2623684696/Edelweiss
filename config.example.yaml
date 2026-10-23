@@ -16,7 +16,8 @@ models:
     #   reasoning:                   #   responses: GPT effort + summary opt-in (summary is required to surface reasoning text).
     #     effort: "low"
     #     summary: "auto"
-    # forceToolCall: false             # force the model to always call a tool
+    # localForceMaxRetries: 3          # retries after first local-force attempt; non-negative integer
+    # toolChoice: force                # force | local-force | none | local-none; omit for automatic selection
 telegram:
   botToken: ""
   apiId: 0
@@ -51,6 +52,9 @@ chats:
   default:
     platform: telegram          # 'telegram' (default) or 'onebot'
     model: "primary"            # references a key in models
+    # Outgoing Telegram reactions: omitted defaults to these; per-chat lists replace it.
+    # Passive incoming reactions are unaffected. [] permits all Telegram-allowed reactions.
+    disabledReactions: ["😁", "🖕", "😇"]
     identityName: "Edelweiss"  # identity name passed to the primary system prompt
     # systemFiles:              # identity files injected into the system prompt (read at startup)
     #   - "./prompts/IDENTITY.md"
@@ -105,6 +109,7 @@ chats:
   # Per-chat overrides — uncomment and customize:
   # "751414718":                   # per-chat partial override (deep-merged with default)
   #   model: "secondary"
+  #   disabledReactions: []         # replace default policy (or supply a custom list)
   # "-1002173016093": {}           # whitelisted Telegram group with all defaults
   # "987654321":                   # QQ group (OneBot)
   #   platform: onebot

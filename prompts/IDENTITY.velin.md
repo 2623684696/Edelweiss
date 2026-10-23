@@ -1,3 +1,17 @@
+<script setup>
+import { computed } from 'vue'
+const props = defineProps({
+  language: { type: String, default: 'zh-CN' },
+  modelName: { type: String, required: true },
+  currentChannel: { type: String, default: 'telegram' },
+  hasLoadSkillTool: { type: Boolean, default: false },
+  hasSubagentTools: { type: Boolean, default: false },
+  hasReactTool: { type: Boolean, default: false },
+  availableReactionEmojis: { type: Array, default: () => [] },
+  availableSkills: { type: Array, default: () => [] },
+  toolChoice: { type: String, default: '' },
+  systemFiles: { type: Array, default: () => [] },
+})
 const platformDescription = computed(() => {
   switch (props.currentChannel) {
     case 'telegram':

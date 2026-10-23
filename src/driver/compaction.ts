@@ -64,7 +64,10 @@ export const runCompaction = async (params: CompactionParams): Promise<Compactio
       label: `compact:${params.chatId}`,
       dumpId: `${params.chatId}.compact`,
       maxImagesAllowed: params.maxImagesAllowed,
-      toolChoice: 'none',
+      // GPT includes tool_choice in its prompt-cache key. Local enforcement keeps
+      // the API tool choice aligned with normal turns, preserving the cached
+      // context prefix and compaction speed.
+      toolChoice: 'local-none',
     });
     summary = extractAssistantText(result.entries);
     inputTokens = result.usage.inputTokens;

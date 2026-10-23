@@ -5,6 +5,7 @@ import { renderMarkdownString } from '@velin-dev/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderPromptTemplate } from '../prompt-template';
+import { filterDisabledReactions } from '../telegram/reaction-policy';
 
 // basePath must be a file (not directory) so createRequire resolves pnpm's node_modules
 const basePath = resolve(__dirname, '../../package.json');
@@ -40,6 +41,13 @@ const renderSystem = (data: Record<string, unknown> = {}) =>
   renderPromptTemplate(systemTemplate, { chatId: 'chat-123', chatName: 'Test Chat', identityName: 'Edelweiss', ...data }, basePath);
 
 describe('primary-system.velin.md', () => {
+  it.each(['force', 'local-force', 'none', 'local-none', undefined])('preserves silence instructions for toolChoice %s', async toolChoice => {
+    const rendered = await renderSystem({ toolChoice, modelName: 'gpt-4o' });
+    const forced = toolChoice === 'force' || toolChoice === 'local-force';
+    expect(rendered.includes('To stay silent, call `stay_silent`.')).toBe(forced);
+    expect(rendered.includes('To stay silent, simply do not call `send_message`.')).toBe(!forced);
+  });
+
   it('renders with minimal props', async () => {
     const rendered = await renderSystem({ modelName: 'gpt-4o' });
     expect(rendered).toMatch(/^language: zh-CN\s+model: gpt-4o\s+current-channel: telegram\s+chat_name: Test Chat\s+chat_id: chat-123\s+/);
@@ -93,11 +101,12 @@ describe('primary-system.velin.md', () => {
     const rendered = await renderSystem({
       modelName: 'gpt-4o',
       hasReactTool: true,
-      availableReactionEmojis: ['👍', '❤️'],
+      availableReactionEmojis: filterDisabledReactions(['👍', '❤️', '😁', '🖕', '😇'], ['😁', '🖕', '😇']),
     });
 
     expect(rendered).toContain('`react_message`');
     expect(rendered).toContain('Allowed reaction emoji: 👍 ❤️');
+    expect(rendered).not.toMatch(/😁|🖕|😇/u);
     expect(rendered).toContain('low-disturbance alternative');
     expect(rendered).toContain('use `react_message` if one fits');
     expect(rendered).toContain('Do not also send a text explanation when the reaction alone carries the intent');

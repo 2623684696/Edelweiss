@@ -14,7 +14,6 @@ import { createToolsForCapabilities } from './tool-providers';
 import type { CapabilityToolProviderDeps } from './tool-providers';
 import type { CahciuaTool, SendMessageAttachment, SendMessageTurnFlags } from './tools';
 import { TurnPreparationSkipped } from './turn-features';
-import type { DriverFeature } from './turn-features';
 import { createTurnPhases, runTurn } from './turn-phases';
 import { buildMainCapabilities, buildMainSystemPromptParams } from './turn-prefix';
 import { createDefaultTurnCapabilities, createSchedulerState } from './turn-state';
@@ -96,7 +95,8 @@ export const createDriver = (config: DriverConfig, deps: {
         apiFormat: endpoint.apiFormat ?? 'openai-chat',
         timeoutSec: endpoint.timeoutSec,
         extraBody: endpoint.extraBody,
-        forceToolCall: endpoint.forceToolCall,
+        toolChoice: endpoint.toolChoice,
+        localForceMaxRetries: endpoint.localForceMaxRetries,
       });
       runners.set(key, runner);
     }
@@ -291,17 +291,6 @@ export const createDriver = (config: DriverConfig, deps: {
       },
     });
 
-    const runMainTurn = async (turn: TurnState, features: DriverFeature[]): Promise<void> => {
-      const runner = getOrCreateRunner(turn.model);
-      await runTurn(turn, createTurnPhases({
-        runner,
-        executorChatId: chatId,
-        log,
-        maxImagesAllowed: turn.model.maxImagesAllowed,
-        features,
-      }));
-    };
-
     // Called from timer callbacks to start the async LLM work.
     const executeLlmCall = () => {
       const turnStart = schedulerController.beginTurn();
@@ -309,9 +298,11 @@ export const createDriver = (config: DriverConfig, deps: {
       const { rcAtStart, wasOffline } = turnStart;
 
       void (async () => {
+        const stepAbortController = new AbortController();
+        let turn: TurnState | undefined;
+        let lifecycleStarted = false;
         try {
-          const stepAbortController = new AbortController();
-          const turn = createMainTurn(rcAtStart, stepAbortController, wasOffline);
+          turn = createMainTurn(rcAtStart, stepAbortController, wasOffline);
           turn.scope.activeTurn = turn;
           schedulerController.attachAbortController(stepAbortController);
           const features = createMainTurnFeatures({
@@ -342,10 +333,34 @@ export const createDriver = (config: DriverConfig, deps: {
             nowString: localTimeNow,
             memory,
           });
-          await runMainTurn(turn, features);
+          const phases = createTurnPhases({
+            runner: getOrCreateRunner(turn.model),
+            executorChatId: chatId,
+            log,
+            maxImagesAllowed: turn.model.maxImagesAllowed,
+            features,
+          });
+          lifecycleStarted = true;
+          await runTurn(turn, phases);
         } catch (err) {
           if (err instanceof TurnPreparationSkipped) return;
-          // runTurn already called failTurn/cleanupTurn for real failures.
+          if (lifecycleStarted) {
+            // runTurn owns failure reporting and cleanup once entered.
+            return;
+          }
+          log.withError(err).withFields({ chatId }).error('Main turn setup failed before lifecycle started');
+          schedulerController.markFailed(rcAtStart);
+        } finally {
+          if (!lifecycleStarted) {
+            // No lifecycle hooks exist yet. Settle only this run, and release
+            // running last so reactive scheduling cannot overlap its cleanup.
+            schedulerController.onTurnSettled();
+            schedulerController.clearAbortController(stepAbortController);
+            if (turn?.scope.activeTurn === turn && turn) turn.scope.activeTurn = null;
+            if (focusMode()) focusMode(false);
+            if (wasOffline) offline(false);
+            running(false);
+          }
         }
       })();
     };

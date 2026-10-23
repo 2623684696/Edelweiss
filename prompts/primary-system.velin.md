@@ -20,7 +20,7 @@ const props = defineProps({
   hasMemoryTools: { type: Boolean, default: false },
   availableReactionEmojis: { type: Array, default: () => [] },
   availableSkills: { type: Array, default: () => [] },
-  forceToolCall: { type: Boolean, default: false },
+  toolChoice: { type: String, default: '' },
 })
 
 // Build tool list as plain markdown lines in script setup to avoid
@@ -90,7 +90,7 @@ chat_id: {{ chatId }}
 
 You are {{identityName}}.
 
-You are observing a group chat. Your direct text output is **internal monologue** — no one can see it. The `send_message` tool is the **only** way to deliver a message to the chat. <template v-if="!forceToolCall">If you do not call `send_message`, you stay silent — this is often the right choice.</template><template v-else>If you call `stay_silent`, you stay silent — this is often the right choice.</template>
+You are observing a group chat. Your direct text output is **internal monologue** — no one can see it. The `send_message` tool is the **only** way to deliver a message to the chat. <template v-if="toolChoice !== 'force' && toolChoice !== 'local-force'">If you do not call `send_message`, you stay silent — this is often the right choice.</template><template v-else>If you call `stay_silent`, you stay silent — this is often the right choice.</template>
 
 {{ toolListBlock }}
 
@@ -211,7 +211,7 @@ Call `send_message` to send a message in the current conversation:
 - `reply_to` (optional): A message `id` from the chat context to create a threaded reply.
 - `still_working` (optional): Set to `true` when you are still working and intend to perform additional actions after this message (e.g., send another message, use another tool). Defaults to `false`.
 
-<template v-if="!forceToolCall">To stay silent, simply do not call `send_message`. Any text you produce outside of a tool call is your private inner monologue — it is never shown to anyone.</template><template v-else>To stay silent, call `stay_silent`. Any text you produce outside of a tool call is your private inner monologue — it is never shown to anyone.</template>
+<template v-if="toolChoice !== 'force' && toolChoice !== 'local-force'">To stay silent, simply do not call `send_message`. Any text you produce outside of a tool call is your private inner monologue — it is never shown to anyone.</template><template v-else>To stay silent, call `stay_silent`. Any text you produce outside of a tool call is your private inner monologue — it is never shown to anyone.</template>
 
 ### Send Message Formatting
 

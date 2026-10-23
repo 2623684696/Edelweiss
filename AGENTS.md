@@ -18,6 +18,8 @@ Key design goals: KV Cache friendly (append-only history, static system prompt, 
 
 ## Current Progress
 
+Synced upstream `rehuactor` through `1960474`: configurable disabled Telegram reactions (default includes 😁), turn setup failure cleanup, and centralized `toolChoice` policies/local retries. Local Liz identity and chat memory prompts are retained; compaction uses `local-none` to preserve the API cache prefix.
+
 Telegram `/start` identifies the deployed bot as PRiSM.
 
 `prompts/liz-chatbot-prompt.md` provides the optional Liz persona; `prompts/maimai/` contains its five worldbuilding references (blackrose, dragon, heaven, metropolis, skystreet). Local prompt backups and unrelated reference material are not part of this bundle.
@@ -465,6 +467,8 @@ Reaction IC nodes render as passive `<event type="reaction_added" .../>` RC segm
 
 `react_message` is registered only for Telegram chats with a configured userbot and a non-empty allowed emoji list. Do not add reaction prompt text or tools to OneBot/QQ paths.
 
+Outgoing reaction policy is configured via `disabledReactions` in `chats.default` or a per-chat override (schema default `['😁', '🖕', '😇']`). Overrides replace the entire list; `[]` clears it. `src/telegram/reaction-policy.ts` matches exact Telegram reaction emoji strings. Driver hooks filter both refreshed and cached allowed lists before they reach tool enums / prompt lists, and independently reject disabled sends (including stale tool calls). Incoming passive reaction history is unaffected. Focused coverage lives in `src/config/config.test.ts` and `src/telegram/driver-hooks.test.ts`.
+
 ### Sticker Pack Title Normalization
 
 Telegram exposes sticker/custom-emoji packs by raw `set_name` slug. Edelweiss keeps that raw slug as `stickerSetId` and resolves the human-readable pack title into `stickerSetName` before messages enter Adaptation. Rendering and prompt generation must treat `stickerSetName` as display title only.
@@ -697,6 +701,8 @@ Manual `/compact` commands on Telegram and OneBot use the same per-chat compacti
 | created_at | INTEGER NOT NULL | millisecond timestamp |
 
 **Compaction is NOT a turn**: compaction has its own dedicated table, not stored in `turn_responses`. It produces a summary (pure text with structured sections), not a provider-format response.
+
+**Prompt-cache prefix reuse**: `runCompaction()` reuses the same system prompt and tool schema as a main turn (`src/driver/turn-prefix.ts` rebuilds the main-turn params), appending the `compaction-late-binding` instruction as the final user message. Tool calls are filtered locally via `toolChoice: local-none`, leaving the API tool-choice policy unset to preserve the cached prefix. Providers that cache in `tools → system → messages` order (Anthropic, OpenAI) can then hit the cached prefix instead of re-billing the whole window. This only saves cost when the compaction endpoint matches the primary model (`compaction.model` unset or pointing at the same model/`apiBaseUrl`); a differing compaction model logs a note and gains nothing. The trade-off is that the chat persona is present in the system prompt, so the trailing instruction explicitly overrides the role to "conversation compressor".
 
 **Token estimation**: Context size is estimated using a `CHARS_PER_TOKEN = 2` heuristic (not an actual tokenizer). Summary size is excluded from the compaction trigger check to prevent the summary from growing until it fills the budget (which would degrade compaction into a sliding window). `findWorkingWindowCursor` counts both RC segments and TRs when determining the cursor position.
 

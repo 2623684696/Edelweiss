@@ -115,7 +115,8 @@ const callModel = async (params: ImageConversationModelCallParams): Promise<Imag
     ...(params.model.apiFormat ? { apiFormat: params.model.apiFormat } : {}),
     ...(params.model.timeoutSec ? { timeoutSec: params.model.timeoutSec } : {}),
     ...(params.model.extraBody ? { extraBody: params.model.extraBody } : {}),
-    ...(params.model.forceToolCall ? { forceToolCall: params.model.forceToolCall } : {}),
+    ...(params.model.toolChoice ? { toolChoice: params.model.toolChoice } : {}),
+    localForceMaxRetries: params.model.localForceMaxRetries,
   }, params.entries, params.systemPrompt, undefined, {
     log: params.log,
     label: params.label,

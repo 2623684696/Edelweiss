@@ -182,7 +182,7 @@ interface TurnState {
 Usage is intentionally **not** accumulated on `TurnState`. Each step persists
 its own input/output token counts on its own `TurnResponseV2` row (one row per
 step), matching the current per-step persistence; there is no turn-level usage
-total to keep. The only place usage is summed today is across `forceToolCall`
+total to keep. The only place usage is summed today is across `toolChoice: local-force`
 retries inside a single step, which stays inside the step executor.
 
 `TurnState` is the shared place for data that today is captured by closures. A

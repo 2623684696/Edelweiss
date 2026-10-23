@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { renderMarkdownString } from '@velin-dev/core';
 
 import { memoryIndex, memoryUsage, type ChatMemory } from '../db/chat-memory';
+import type { ToolChoice } from '../llm/tool-choice';
 import { cleanVelinOutput, renderPromptTemplate } from '../prompt-template';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -37,7 +38,7 @@ export interface SystemPromptParams {
   hasMemoryTools?: boolean;
   availableReactionEmojis?: string[];
   availableSkills?: AvailableSkillPromptInfo[];
-  forceToolCall?: boolean | 'api' | 'local';
+  toolChoice?: ToolChoice;
 }
 
 export const renderSystemPrompt = async (params: SystemPromptParams) => {
@@ -55,7 +56,7 @@ export const renderSystemPrompt = async (params: SystemPromptParams) => {
     hasMemoryTools: params.hasMemoryTools,
     availableReactionEmojis: params.availableReactionEmojis,
     availableSkills: params.availableSkills,
-    forceToolCall: params.forceToolCall !== false && params.forceToolCall !== undefined,
+    toolChoice: params.toolChoice,
     systemFiles: params.systemFiles,
   }, basePath);
 };
@@ -93,12 +94,12 @@ export const renderLateBindingPrompt = async (params: {
   recentSendMessageHumanLikenessXml?: string;
   activeBackgroundTasks?: { id: number; typeName: string; intention?: string; liveSummary: string; startedMs: number; timeoutMs: number }[];
   isInterrupted?: boolean;
-  forceToolCall?: boolean | 'api' | 'local';
+  toolChoice?: ToolChoice;
 }) => {
   const { memories, ...templateParams } = params;
   const { rendered } = await renderMarkdownString(lateBindingTemplate, {
     ...templateParams,
-    forceToolCall: params.forceToolCall !== false && params.forceToolCall !== undefined,
+    toolChoice: params.toolChoice,
   }, basePath);
   // Insert serialized data after Velin rendering, like system-file placeholders,
   // so Markdown escaping cannot corrupt XML entities or collapse memory lines.
