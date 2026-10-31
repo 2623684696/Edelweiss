@@ -443,6 +443,10 @@ export const createDriver = (config: DriverConfig, deps: {
         // forbidden at the API boundary via tool_choice: none.
         const reactionEmojis = deps.getAllowedReactionEmojis?.(chatId) ?? [];
         const capabilities = buildMainCapabilities(chatConfig, reactionEmojis);
+        const tools = [
+          ...createCapabilityTools(capabilities, reactionEmojis, { wasLengthLimited: false, inFocusMode: false }),
+          ...(chatConfig.subagents.enabled ? subagentManager.mainTools() : []),
+        ].map(toToolSchema);
         const system = await renderSystemPrompt(buildMainSystemPromptParams({
           chatId,
           chatName: await getChatName(),
@@ -451,11 +455,8 @@ export const createDriver = (config: DriverConfig, deps: {
           reactionEmojis,
           capabilities,
           hasMemoryTools: Boolean(memory),
+          hasPokeTool: tools.some(tool => tool.name === 'poke_user'),
         }));
-        const tools = [
-          ...createCapabilityTools(capabilities, reactionEmojis, { wasLengthLimited: false, inFocusMode: false }),
-          ...(chatConfig.subagents.enabled ? subagentManager.mainTools() : []),
-        ].map(toToolSchema);
 
         if (compactEndpoint.model !== chatConfig.primaryModel.model
           || compactEndpoint.apiBaseUrl !== chatConfig.primaryModel.apiBaseUrl) {

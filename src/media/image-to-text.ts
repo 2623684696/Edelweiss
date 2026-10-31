@@ -4,6 +4,7 @@ import type { Logger } from '@guiiai/logg';
 import sharp from 'sharp';
 
 import type { ImageConversationManager } from './image-conversation';
+import { isLongImage, splitImageTiles } from './image-tiles';
 import { renderImageToTextSystemPrompt } from './image-to-text-prompt';
 import { callDescriptionLlm, createSemaphore } from './llm-description';
 import type { CanonicalAttachment } from '../adaption-types';
@@ -44,7 +45,14 @@ export const prepareImageToTextBuffer = async (
   options: ImageToTextResolveOptions = {},
 ): Promise<Buffer> => {
   const image = sharp(buffer);
-  const shouldCompress = options.isSticker === false || compression.compress;
+  const shouldCompress = options.isSticker === true || compression.compress;
+  const { width = 1, height = 1 } = await image.metadata();
+  if (isLongImage(width, height)) {
+    return await image.resize({
+      ...(width < height ? { width: 768 } : { height: 768 }),
+      withoutEnlargement: true,
+    }).flatten({ background: '#ffffff' }).png().toBuffer();
+  }
   const maxEdge = shouldCompress ? await maxEdgeForPixelBudget(buffer, compression.pixelBudget) : undefined;
   const prepared = maxEdge
     ? image.resize(maxEdge, maxEdge, {
@@ -82,7 +90,7 @@ export interface ImageToTextResolver {
 }
 
 const hashBuffer = (buffer: Buffer): string =>
-  createHash('sha256').update(buffer).digest('hex');
+  createHash('sha256').update('image-tiles-v1:').update(buffer).digest('hex');
 
 /** Compute cache key from a base64-encoded thumbnail. */
 export const computeThumbnailHash = (thumbnailWebp: string): string =>
@@ -134,7 +142,7 @@ export const createImageToTextResolver = (params: {
           model,
           system,
           userText,
-          images: [imageBuffer],
+          images: await splitImageTiles(imageBuffer),
           log,
           label: 'image-to-text',
         });

@@ -2,9 +2,17 @@ import sharp from 'sharp';
 
 import type { CahciuaTool } from './types';
 import { createTool } from './types';
+import { isLongImage } from '../../media/image-tiles';
 
 const prepareImage = async (buffer: Buffer, detail: 'low' | 'high'): Promise<Buffer> => {
   const maxEdge = detail === 'high' ? 1024 : 512;
+  const { width = 1, height = 1 } = await sharp(buffer).metadata();
+  if (isLongImage(width, height)) {
+    return await sharp(buffer).resize({
+      ...(width < height ? { width: 768 } : { height: 768 }),
+      withoutEnlargement: true,
+    }).png().toBuffer();
+  }
   return await sharp(buffer)
     .resize(maxEdge, maxEdge, { fit: 'inside', withoutEnlargement: true })
     .png()

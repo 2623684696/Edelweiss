@@ -68,6 +68,7 @@ export const createOneBotPlatformAdapter = (deps: OneBotPlatformAdapterDeps): Pl
 
   return {
     kind: 'onebot',
+    pokeUser: async (chatId, userId) => await requireApi().pokeUser(chatId, userId),
     sendMessage: async (chatId, text, options) => {
       const segments = await buildSendMessage(runtime, text, {
         replyTo: options?.replyTo,

@@ -34,6 +34,7 @@ export interface SystemPromptParams {
   hasLoadSkillTool?: boolean;
   hasSubagentTools?: boolean;
   hasReactTool?: boolean;
+  hasPokeTool?: boolean;
   hasAskForImageTool?: boolean;
   hasMemoryTools?: boolean;
   availableReactionEmojis?: string[];
@@ -52,6 +53,7 @@ export const renderSystemPrompt = async (params: SystemPromptParams) => {
     hasLoadSkillTool: params.hasLoadSkillTool,
     hasSubagentTools: params.hasSubagentTools,
     hasReactTool: params.hasReactTool,
+    hasPokeTool: params.hasPokeTool,
     hasAskForImageTool: params.hasAskForImageTool,
     hasMemoryTools: params.hasMemoryTools,
     availableReactionEmojis: params.availableReactionEmojis,

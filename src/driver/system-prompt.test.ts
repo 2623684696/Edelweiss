@@ -41,6 +41,15 @@ const renderSystem = (data: Record<string, unknown> = {}) =>
   renderPromptTemplate(systemTemplate, { chatId: 'chat-123', chatName: 'Test Chat', identityName: 'Edelweiss', ...data }, basePath);
 
 describe('primary-system.velin.md', () => {
+  it('advertises real QQ pokes only when the tool is available', async () => {
+    const rendered = await renderSystem({ modelName: 'test', currentChannel: 'onebot', hasPokeTool: true });
+    expect(rendered).toContain('`poke_user`');
+    expect(rendered).toContain('numeric QQ user_id');
+    expect(rendered).toContain('do not automatically return every poke');
+    expect(await renderSystem({ modelName: 'test', hasPokeTool: false })).not.toContain('poke_user');
+    assertNoVueSyntaxLeak(rendered);
+  });
+
   it.each(['force', 'local-force', 'none', 'local-none', undefined])('preserves silence instructions for toolChoice %s', async toolChoice => {
     const rendered = await renderSystem({ toolChoice, modelName: 'gpt-4o' });
     const forced = toolChoice === 'force' || toolChoice === 'local-force';

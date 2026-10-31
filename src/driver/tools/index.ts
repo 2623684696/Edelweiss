@@ -13,6 +13,7 @@ export { createReadTaskOutputTool } from './read-task-output';
 export { createLoadSkillTool } from './load-skill';
 export { createStaySilentTool } from './stay-silent';
 export { createReactMessageTool } from './react-message';
+export { createPokeUserTool } from './poke-user';
 export { createReadImageTool } from './read-image';
 export { createAskForImageTool } from './ask-for-image';
 export { createMemoryTools } from './memory';

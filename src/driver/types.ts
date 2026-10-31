@@ -53,6 +53,7 @@ export interface SentMessage {
 
 export interface PlatformAdapter {
   kind: 'telegram' | 'onebot';
+  pokeUser?(chatId: string, userId: string): Promise<void>;
   sendMessage(chatId: string, text: string, options?: SendMessageOptions): Promise<SentMessage>;
   downloadFile(identifier: string, chatId: string): Promise<Buffer>;
   downloadImage(identifier: string, chatId: string): Promise<Buffer>;

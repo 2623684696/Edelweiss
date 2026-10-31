@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createToolsForCapabilities } from './tool-providers';
 import type { CapabilityToolProviderDeps } from './tool-providers';
+import { buildMainCapabilities } from './turn-prefix';
 import { createDefaultTurnCapabilities } from './turn-state';
 import type { ResolvedChatConfig, RuntimeConfig } from '../config/config';
 
@@ -54,6 +55,38 @@ const deps = (platform: 'telegram' | 'onebot', sendMessage: CapabilityToolProvid
 });
 
 describe('createToolsForCapabilities send routing', () => {
+  it('scopes pokes to main OneBot group turns and validates targets', async () => {
+    const toolDeps = deps('onebot', vi.fn());
+    const pokeUser = vi.fn(async () => {});
+    const adapter = { kind: 'onebot' as const, pokeUser, sendMessage: vi.fn(), downloadFile: vi.fn(), downloadImage: vi.fn() };
+    toolDeps.getPlatformAdapter = () => adapter;
+    toolDeps.chatConfig.subagents = { enabled: false } as ResolvedChatConfig['subagents'];
+    const find = (kind: 'main' | 'subagent' = 'main') => createToolsForCapabilities(toolDeps,
+      kind === 'main' ? buildMainCapabilities(toolDeps.chatConfig, []) : createDefaultTurnCapabilities(kind))
+      .find(tool => tool.function.name === 'poke_user');
+    expect(buildMainCapabilities(toolDeps.chatConfig, []).canReact).toBe(false);
+    const tool = find()!;
+    expect(tool.execution?.lane).toBe('message');
+    await tool.execute({ user_id: '123' }, { toolCallId: 'poke' });
+    expect(pokeUser).toHaveBeenCalledExactlyOnceWith('100', '123');
+    for (const user_id of ['', '-1', '1x', '9007199254740992', 123]) {
+      const result = await tool.execute({ user_id }, { toolCallId: 'invalid' });
+      expect(JSON.parse(result.content as string).ok).toBe(false);
+    }
+    expect(pokeUser).toHaveBeenCalledTimes(1);
+    pokeUser.mockRejectedValueOnce(new Error('disconnected'));
+    await expect(tool.execute({ user_id: '123' }, { toolCallId: 'failure' })).rejects.toThrow('disconnected');
+    expect(find('subagent')).toBeUndefined();
+    toolDeps.chatId = 'private:123';
+    expect(find()).toBeUndefined();
+    toolDeps.chatId = '100';
+    toolDeps.chatConfig.platform = 'telegram';
+    expect(find()).toBeUndefined();
+    toolDeps.chatConfig.platform = 'onebot';
+    toolDeps.getPlatformAdapter = () => undefined;
+    expect(find()).toBeUndefined();
+  });
+
   it('offers scoped memory tools only to main turns with a store', () => {
     const toolDeps = deps('onebot', vi.fn());
     const names = (kind: 'main' | 'subagent') => createToolsForCapabilities(toolDeps, createDefaultTurnCapabilities(kind))

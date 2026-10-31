@@ -39,6 +39,7 @@ const GROUP_MEMBER_CACHE_MAX = 5_000;
 const FRIEND_REMARK_TTL_MS = 10 * 60_000;
 
 export interface OneBotApiClient {
+  pokeUser(chatId: string, userId: string): Promise<void>;
   sendMessage(chatId: string, segments: OneBotMessageSegment[], replyTo?: string): Promise<{ messageId: string }>;
   /** Download a file. For OneBot, `file` is typically a file identifier or URL from a message segment. */
   downloadFile(file: string, chatId: string): Promise<Buffer>;
@@ -235,6 +236,14 @@ const createApiClient = (
       });
 
       return { messageId: String(result.message_id) };
+    },
+
+    pokeUser: async (chatId, userId) => {
+      for (const id of [chatId, userId]) {
+        if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id)))
+          throw new Error('Group poke requires positive safe-integer group and user IDs');
+      }
+      await call('group_poke', { group_id: Number(chatId), user_id: Number(userId) });
     },
 
     downloadFile: async (file: string, chatId: string): Promise<Buffer> => {

@@ -12,6 +12,7 @@ const runtimeConfig = {
 } as unknown as RuntimeConfig;
 
 const stubApi = (messageId: string): OneBotApiClient => ({
+  pokeUser: vi.fn(async () => {}),
   sendMessage: vi.fn(async () => ({ messageId })),
   downloadFile: vi.fn(async () => Buffer.alloc(0)),
   getGroupMemberInfo: vi.fn(async () => ({ id: '0', displayName: 'x', isBot: false })),
@@ -69,9 +70,14 @@ describe('createOneBotPlatformAdapter self-sent injection', () => {
     });
 
     await expect(adapter.sendMessage('100', 'first')).resolves.toEqual({ messageId: 'first' });
+    await adapter.pokeUser!('100', '123');
+    expect(firstApi.pokeUser).toHaveBeenCalledExactlyOnceWith('100', '123');
     currentApi = null;
+    await expect(adapter.pokeUser!('100', '123')).rejects.toThrow('OneBot is disconnected');
     await expect(adapter.sendMessage('100', 'offline')).rejects.toThrow('OneBot is disconnected');
     currentApi = secondApi;
+    await adapter.pokeUser!('100', '456');
+    expect(secondApi.pokeUser).toHaveBeenCalledExactlyOnceWith('100', '456');
     await expect(adapter.sendMessage('100', 'second')).resolves.toEqual({ messageId: 'second' });
 
     expect(firstApi.sendMessage).toHaveBeenCalledOnce();

@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createImageConversationManager } from './image-conversation';
@@ -45,7 +46,7 @@ const startParams = {
   chatId: 'chat',
   sourceKey: 'read_image:file_id:1:0:high',
   imageHash: 'hash',
-  preparedImage: Buffer.from('image'),
+  preparedImage: await sharp({ create: { width: 2, height: 2, channels: 3, background: 'red' } }).png().toBuffer(),
   systemPrompt: 'THE EXACT HIGH DETAIL PROMPT',
   initialUserText: 'Describe this image.',
   model,
@@ -53,6 +54,23 @@ const startParams = {
 };
 
 describe('ImageConversationManager', () => {
+  it('replays the same ordered long-image tiles after persistence', async () => {
+    const store = createStore();
+    const calls: ImageConversationModelCallParams[] = [];
+    const callModel = async (params: ImageConversationModelCallParams) => {
+      calls.push(params);
+      return { text: 'answer', usage: { inputTokens: 10, outputTokens: 2 } };
+    };
+    const manager = createImageConversationManager({ store, logger, callModel });
+    const preparedImage = await sharp({ create: { width: 768, height: 7680, channels: 3, background: 'red' } }).png().toBuffer();
+    const session = await manager.start({ ...startParams, preparedImage });
+    const restarted = createImageConversationManager({ store, logger, callModel });
+    await restarted.ask({ chatId: 'chat', imageId: session.imageId, question: 'text?', model, maxContextEstTokens: 10000 });
+    for (const call of calls) {
+      const entry = call.entries[0]!;
+      expect(entry.kind === 'message' && entry.parts.filter(part => part.kind === 'image')).toHaveLength(6);
+    }
+  });
   it('persists the exact prompt used by the first call and reuses the same identity', async () => {
     const store = createStore();
     const callModel = vi.fn(async ({ systemPrompt }) => ({

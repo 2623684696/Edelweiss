@@ -32,6 +32,7 @@ export const buildMainSystemPromptParams = (params: {
   reactionEmojis: string[];
   capabilities: TurnCapabilities;
   hasMemoryTools?: boolean;
+  hasPokeTool?: boolean;
 }): SystemPromptParams => ({
   chatId: params.chatId,
   chatName: params.chatName,
@@ -45,6 +46,7 @@ export const buildMainSystemPromptParams = (params: {
   hasReactTool: params.chatConfig.platform === 'telegram' && params.reactionEmojis.length > 0,
   hasAskForImageTool: Boolean(params.chatConfig.imageToText.model && params.capabilities.canAskForImage),
   hasMemoryTools: Boolean(params.hasMemoryTools && params.capabilities.canManageMemory),
+  hasPokeTool: Boolean(params.hasPokeTool),
   availableReactionEmojis: params.reactionEmojis,
   availableSkills: [...params.allSkills.values()]
     .map(s => ({

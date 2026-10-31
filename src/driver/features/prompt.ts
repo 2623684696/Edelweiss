@@ -16,6 +16,7 @@ export const createPromptFeature = (deps: MainTurnFeatureDeps): DriverFeature =>
       reactionEmojis: turn.reactionEmojis,
       capabilities: turn.capabilities,
       hasMemoryTools: Boolean(deps.memory),
+      hasPokeTool: turn.tools.some(tool => tool.function.name === 'poke_user'),
     }));
 
     const isInterrupted = wasToolLoopInterrupted(turn.trs);

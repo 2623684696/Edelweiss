@@ -150,6 +150,33 @@ describe('createOneBotServer', () => {
     return client;
   };
 
+  it('sends group_poke with scoped IDs and propagates API errors', async () => {
+    const server = createOneBotServer({ enabled: true, host: '127.0.0.1', port: 0, accessToken: '' }, {
+      onEvent: () => {}, log: useLogger('onebot-server-test'),
+    });
+    await server.start();
+    try {
+      const port = typeof server.address === 'object' ? server.address?.port : undefined;
+      const client = await connect(port!);
+      const requests: unknown[] = [];
+      client.on('message', data => {
+        const payload = JSON.parse(data.toString());
+        requests.push({ action: payload.action, params: payload.params });
+        client.send(JSON.stringify(requests.length === 1
+          ? { status: 'ok', retcode: 0, data: null, echo: payload.echo }
+          : { status: 'failed', retcode: 100, wording: 'poke denied', echo: payload.echo }));
+      });
+      await expect(server.api!.pokeUser('100', '123')).resolves.toBeUndefined();
+      expect(requests).toEqual([{ action: 'group_poke', params: { group_id: 100, user_id: 123 } }]);
+      await expect(server.api!.pokeUser('private:123', '123')).rejects.toThrow('Group poke requires');
+      await expect(server.api!.pokeUser('100', '123x')).rejects.toThrow('Group poke requires');
+      expect(requests).toHaveLength(1);
+      await expect(server.api!.pokeUser('100', '123')).rejects.toThrow('poke denied');
+    } finally {
+      await server.stop();
+    }
+  });
+
   it.each([
     ['1101575664', 'get_group_file_url', { group_id: 1101575664 }],
     ['private:123', 'get_private_file_url', { user_id: 123 }],

@@ -18,7 +18,13 @@ Key design goals: KV Cache friendly (append-only history, static system prompt, 
 
 ## Current Progress
 
+QQ poke availability is gated by message-send capability, not Telegram-only `canReact`. Main and compaction prompts derive `hasPokeTool` from assembled tools and include conditional usage guidance; provider regression tests use production `buildMainCapabilities`.
+
+Main turns in OneBot groups can use `poke_user` (`src/driver/tools/poke-user.ts`) through the current chat's platform adapter and `group_poke` API. The tool runs in the message lane, validates QQ IDs, and is unavailable in Telegram, private chats, subagents, or without adapter support. Incoming pokes do not trigger unconditional auto-pokes; self-originated notices remain ignored.
+
 Synced upstream `rehuactor` through `1960474`: configurable disabled Telegram reactions (default includes 😁), turn setup failure cleanup, and centralized `toolChoice` policies/local retries. Local Liz identity and chat memory prompts are retained; compaction uses `local-none` to preserve the API cache prefix.
+
+Long-image vision inputs now retain up to 768px on the short edge and split into ordered 1536px sections with 128px overlap (maximum 32 sections, explicit failure beyond limits). `src/media/image-tiles.ts` is shared by automatic descriptions and persisted vision conversation replay, including `read_image`. Image-description cache hashes are versioned to avoid reusing previously downscaled descriptions. Ordinary photos honor disabled compression; stickers always compress. Model image limits fail explicitly instead of silently dropping sections.
 
 Telegram `/start` identifies the deployed bot as PRiSM.
 

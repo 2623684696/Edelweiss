@@ -16,6 +16,7 @@ const props = defineProps({
   hasLoadSkillTool: { type: Boolean, default: false },
   hasSubagentTools: { type: Boolean, default: false },
   hasReactTool: { type: Boolean, default: false },
+  hasPokeTool: { type: Boolean, default: false },
   hasAskForImageTool: { type: Boolean, default: false },
   hasMemoryTools: { type: Boolean, default: false },
   availableReactionEmojis: { type: Array, default: () => [] },
@@ -43,6 +44,9 @@ const toolListBlock = computed(() => {
   }
   if (props.hasReactTool) {
     lines.push('`react_message` — Add a lightweight emoji reaction to a Telegram message. Use it as a low-disturbance alternative when a small acknowledgement, agreement, thanks, or amusement is enough.')
+  }
+  if (props.hasPokeTool) {
+    lines.push('`poke_user` — Poke someone in the current QQ group using their numeric QQ user_id from chat context. You can return a poke to the actor of a poke service event or initiate a playful poke when appropriate. This performs a real poke; merely saying you poked someone does not. Use sparingly, never repeatedly, and do not automatically return every poke. No text explanation is needed when the poke alone carries your intent.')
   }
   if (props.hasMemoryTools) {
     lines.push(

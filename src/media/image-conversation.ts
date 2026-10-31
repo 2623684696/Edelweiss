@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type { Logger } from '@guiiai/logg';
 import sharp from 'sharp';
 
+import { splitImageTiles } from './image-tiles';
 import { callLlm } from '../driver/call-llm';
 import type { LlmEndpoint } from '../llm/types';
 import type { ConversationEntry, InputMessage, OutputMessage } from '../unified-api/types';
@@ -108,6 +109,12 @@ export interface ImageConversationModelCallResult {
 }
 
 const callModel = async (params: ImageConversationModelCallParams): Promise<ImageConversationModelCallResult> => {
+  const imageCount = params.entries.reduce((count, entry) => count + (
+    entry.kind === 'message' && entry.role === 'user'
+      ? entry.parts.filter(part => part.kind === 'image').length : 0
+  ), 0);
+  if (params.model.maxImagesAllowed != null && imageCount > params.model.maxImagesAllowed)
+    throw new Error('Image sections exceed model.maxImagesAllowed; increase the limit or send smaller sections.');
   const result = await callLlm({
     apiBaseUrl: params.model.apiBaseUrl,
     apiKey: params.model.apiKey,
@@ -127,12 +134,13 @@ const callModel = async (params: ImageConversationModelCallParams): Promise<Imag
   return { text, usage: result.usage };
 };
 
-const baseEntries = (conversation: ImageConversationRecord): ConversationEntry[] => [{
+const baseEntries = async (conversation: ImageConversationRecord): Promise<ConversationEntry[]> => [{
   kind: 'message',
   role: 'user',
   parts: [
     { kind: 'text', text: conversation.initialUserText },
-    { kind: 'image', image: sharp(Buffer.from(conversation.preparedImageBase64, 'base64')), detail: undefined },
+    ...(await splitImageTiles(Buffer.from(conversation.preparedImageBase64, 'base64')))
+      .map(image => ({ kind: 'image' as const, image: sharp(image), detail: undefined })),
   ],
 } satisfies InputMessage, {
   kind: 'message',
@@ -217,7 +225,8 @@ export const createImageConversationManager = (deps: {
             role: 'user',
             parts: [
               { kind: 'text', text: params.initialUserText },
-              { kind: 'image', image: sharp(params.preparedImage), detail: undefined },
+              ...(await splitImageTiles(params.preparedImage))
+                .map(image => ({ kind: 'image' as const, image: sharp(image), detail: undefined })),
             ],
           } satisfies InputMessage],
           log,
@@ -257,8 +266,9 @@ export const createImageConversationManager = (deps: {
     const turns = deps.store.loadTurns(conversation.id, conversation.currentGeneration);
     let reset = estimateContextTokens(conversation, turns, params.question) > params.maxContextEstTokens;
 
+    const seedEntries = await baseEntries(conversation);
     const makeEntries = (includeTurns: boolean): ConversationEntry[] => [
-      ...baseEntries(conversation),
+      ...seedEntries,
       ...(includeTurns ? turnEntries(turns) : []),
       { kind: 'message', role: 'user', parts: [{ kind: 'text', text: params.question }] } satisfies InputMessage,
     ];

@@ -6,6 +6,7 @@ import type { Logger } from '@guiiai/logg';
 import type { SkillInfo } from './skills';
 import { createAskForImageTool, createBashTool, createAttachmentDownloader, createDownloadFileTool, createKillTaskTool, createReadImageTool, createReadTaskOutputTool, createSendMessageTool, createSleepTool, createWebFetchTool, createWebSearchTool, createStaySilentTool, createReactMessageTool, createEnterFocusTool, createMemoryTools } from './tools';
 import type { CahciuaTool, SendMessageAttachment, SendMessageTurnFlags } from './tools';
+import { createPokeUserTool } from './tools/poke-user';
 import type { DriverSignal, TurnCapabilities, TurnState } from './turn-state';
 import type { PlatformAdapter } from './types';
 import { createWebFetcher } from './web-fetch';
@@ -208,6 +209,10 @@ export const createToolsForCapabilities = (
   return [
     ...createChatTools(),
     ...createReactionTools(),
+    ...(capabilities.canSendMessage && chatConfig.platform === 'onebot'
+      && platform?.kind === 'onebot' && platform.pokeUser && !chatId.startsWith('private:')
+      ? [createPokeUserTool(userId => platform.pokeUser!(chatId, userId))]
+      : []),
     ...createBashTools(),
     ...createWebTools(),
     ...createDownloadTools(),

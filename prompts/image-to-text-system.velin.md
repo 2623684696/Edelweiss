@@ -22,6 +22,8 @@ When describing, please consider:
 - Category of the image. (i.e. painting, landscape, portrait, CG, hand drawing, screenshot, etc.)
 - How the image is structured.
 
+Multiple images are consecutive overlapping sections of one long image, ordered top-to-bottom (or left-to-right for a wide image). Read all sections as one image, without duplicating text in the overlaps. For long screenshots, prioritize complete text over the short description word limit.
+
 If the image contains text, describe the image in the same language as the text. Preserve all text verbatim — do not summarize, paraphrase, or translate it.
 
 If the image is a portrait or human related, please include:

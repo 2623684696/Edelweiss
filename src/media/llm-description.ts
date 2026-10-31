@@ -53,6 +53,8 @@ export const callDescriptionLlm = async (params: {
   label: string;
 }): Promise<{ text: string; outputTokens: number }> => {
   const { model, system, userText, images, log, label } = params;
+  if (model.maxImagesAllowed != null && images.length > model.maxImagesAllowed)
+    throw new Error('Image sections exceed model.maxImagesAllowed; increase the limit or send smaller sections.');
 
   log.withFields({ systemLen: system.length, images: images.length, apiFormat: model.apiFormat ?? 'openai-chat' }).log(`${label} request`);
 

@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 
+import { splitImageTiles } from './image-tiles';
 import { createImageToTextResolver, prepareImageToTextBuffer } from './image-to-text';
 
 const imageSizeFromBuffer = async (buffer: Buffer) => {
@@ -9,6 +10,29 @@ const imageSizeFromBuffer = async (buffer: Buffer) => {
 };
 
 describe('prepareImageToTextBuffer', () => {
+  it('preserves readable width and covers an entire scrolling screenshot', async () => {
+    const source = await sharp({ create: { width: 1000, height: 10000, channels: 3, background: 'red' } }).png().toBuffer();
+    const prepared = await prepareImageToTextBuffer(source);
+    expect(await imageSizeFromBuffer(prepared)).toEqual({ width: 768, height: 7680 });
+    const tiles = await splitImageTiles(prepared);
+    const sizes = await Promise.all(tiles.map(imageSizeFromBuffer));
+    expect(sizes).toHaveLength(6);
+    expect(sizes.every(size => size.width === 768 && size.height! <= 1536)).toBe(true);
+    expect(sizes.reduce((sum, size) => sum + size.height!, 0) - 128 * (sizes.length - 1)).toBe(7680);
+  });
+
+  it('splits horizontal panoramas without dropping the tail', async () => {
+    const source = await sharp({ create: { width: 4000, height: 400, channels: 3, background: 'red' } }).png().toBuffer();
+    const tiles = await splitImageTiles(await prepareImageToTextBuffer(source));
+    expect(await imageSizeFromBuffer(tiles[2]!)).toEqual({ width: 1184, height: 400 });
+  });
+
+  it('honors disabled compression for ordinary photos', async () => {
+    const source = await sharp({ create: { width: 800, height: 600, channels: 3, background: 'red' } }).png().toBuffer();
+    expect(await imageSizeFromBuffer(await prepareImageToTextBuffer(source, {
+      compress: false, pixelBudget: 262144,
+    }, { isSticker: false }))).toEqual({ width: 800, height: 600 });
+  });
   it('compresses images by default', async () => {
     const source = await sharp({
       create: {
