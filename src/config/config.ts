@@ -13,7 +13,7 @@ import type { LlmEndpoint, ProviderFormat } from '../llm/types';
 const llmEndpointEntries = {
   apiBaseUrl: v.string(),
   apiKey: v.string(),
-  model: v.string(),
+  model: v.optional(v.string()),
   apiFormat: v.optional(v.picklist(['openai-chat', 'responses', 'anthropic-messages'])),
   maxImagesAllowed: v.optional(v.number()),
   timeoutSec: v.optional(v.number()),
@@ -104,6 +104,7 @@ const ChatConfigSchema = v.object({
         apiKey: v.optional(v.string(), ''),
       }), {}),
     })),
+    image2: v.optional(v.object({ model: v.optional(v.string()) })),
   }),
 });
 
@@ -175,6 +176,7 @@ const ChatOverrideSchema = v.optional(v.partial(v.object({
         apiKey: v.string(),
       })),
     })),
+    image2: v.partial(v.object({ model: v.string() })),
   })),
 })), {});
 
@@ -263,6 +265,7 @@ export interface ResolvedChatConfig {
     bash: { backgroundThresholdSec: number; compactOutput: boolean };
     webSearch: { tavilyKey: string };
     webFetch?: WebFetchConfig;
+    image2?: { model?: string };
   };
 }
 
@@ -318,8 +321,8 @@ export const resolveBackgroundTasks = (config: Config): BackgroundTasksConfig =>
 
 export const resolveModel = (config: Config, name: string): LlmEndpoint => {
   const entry = config.models[name];
-  if (!entry) throw new Error(`Unknown model "${name}" — not found in models registry`);
-  return entry;
+  if (!entry || !entry.model) throw new Error(`Unknown or incomplete model "${name}" — expected a model name`);
+  return entry as LlmEndpoint;
 };
 
 /** Return whitelisted chat IDs (all keys in chats except "default"). */
@@ -386,6 +389,7 @@ export const resolveChatConfig = (config: Config, chatId: string): ResolvedChatC
       webFetch: merged.tools.webFetch
         ? { provider: merged.tools.webFetch.provider, jina: { apiKey: merged.tools.webFetch.jina.apiKey } }
         : undefined,
+      image2: merged.tools.image2 ? { model: merged.tools.image2.model } : undefined,
     },
   };
 };

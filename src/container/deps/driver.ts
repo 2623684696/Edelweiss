@@ -63,6 +63,12 @@ export default function registerDriver({ get, register }: Registrar): void {
         ? (chatId, isDebouncing) => telegram.driverHooks.onDebounceStateChange(chatId, isDebouncing)
         : undefined,
       resolveModel: name => resolveModel(config, name),
+      getImage2Endpoint: chatId => {
+        const chatTools = resolveChatConfig(config, chatId).tools.image2;
+        const endpoint = config.models.image2;
+        if (!chatTools?.model || !endpoint?.apiBaseUrl || !endpoint.apiKey) return undefined;
+        return { ...endpoint, model: chatTools.model };
+      },
       imageConversations: get(TOKENS.IMAGE_CONVERSATION_MANAGER),
       getChatMemoryStore: (platform, chatId) => createChatMemoryStore(db, platform, chatId),
       getQqPrivateMemory: userId => {

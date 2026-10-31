@@ -1,4 +1,7 @@
 models:
+  # image2:
+  #   apiBaseUrl: "https://api.example.com/v1"
+  #   apiKey: ""
   primary:
     apiBaseUrl: ""
     apiKey: ""
@@ -88,6 +91,8 @@ chats:
     #   notErshi: true                # reject rigid 不是…而是… / 是…不是… / 不是…是… drafts for regeneration
     # Tools: configuration for enabled tools.
     tools:
+      # image2:
+      #   model: "gpt-image-1"  # uses the top-level models.image2 endpoint
       # bash:
       #   backgroundThresholdSec: 10               # timeout threshold above which bash runs as background task
       #   compactOutput: false                     # pipe output through rtk for token savings (requires rtk in PATH)

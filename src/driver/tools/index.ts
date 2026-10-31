@@ -17,6 +17,7 @@ export { createPokeUserTool } from './poke-user';
 export { createReadImageTool } from './read-image';
 export { createAskForImageTool } from './ask-for-image';
 export { createMemoryTools, createQqPrivateMemoryTool } from './memory';
+export { createImage2Tool } from './image2';
 export { createSleepTool } from './sleep';
 export { createEnterFocusTool } from './focus-mode';
 

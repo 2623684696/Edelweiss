@@ -8,6 +8,7 @@ import { createAskForImageTool, createBashTool, createAttachmentDownloader, crea
 import type { CahciuaTool, SendMessageAttachment, SendMessageTurnFlags } from './tools';
 import { createPokeUserTool } from './tools/poke-user';
 import { createQqPrivateMemoryTool } from './tools/memory';
+import { createImage2Tool } from './tools/image2';
 import type { DriverSignal, TurnCapabilities, TurnState } from './turn-state';
 import type { PlatformAdapter } from './types';
 import { createWebFetcher } from './web-fetch';
@@ -36,6 +37,7 @@ export interface CapabilityToolProviderDeps {
   imageConversations: ImageConversationManager;
   memory?: ChatMemoryStore;
   qqPrivateMemory?: { groups: string[]; keys?: string[]; read: (groups: string[], keys?: string[]) => unknown };
+  image2?: LlmEndpoint;
   backgroundTask: {
     startTask: (typeName: string, sessionId: string, params: unknown, intention: string | undefined, timeoutMs: number) => number;
     killTask: (taskId: number) => { ok: boolean; error?: string };
@@ -230,6 +232,16 @@ export const createToolsForCapabilities = (
           const configuredKeys = deps.qqPrivateMemory!.keys;
           if (keys?.some(key => configuredKeys && !configuredKeys.includes(key))) throw new Error('One or more memory keys are not allowed by qq-private-memory.yaml');
           return deps.qqPrivateMemory!.read(selected, keys);
+        })]
+      : []),
+    ...(capabilities.canSendMessage && deps.image2
+      ? [createImage2Tool(deps.image2, async (text, attachments) => {
+          if (!deps.getPlatformAdapter && chatConfig.platform === 'onebot') throw new Error('OneBot adapter unavailable');
+          const adapter = deps.getPlatformAdapter?.(chatId);
+          if (adapter) return await adapter.sendMessage(chatId, text, { attachments });
+          if (chatConfig.platform === 'onebot') throw new Error('OneBot adapter unavailable; refusing Telegram fallback');
+          const sent = await deps.sendMessage(chatId, text, undefined, attachments);
+          return { messageId: String(sent.messageId) };
         })]
       : []),
   ];
