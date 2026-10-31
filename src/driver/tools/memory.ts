@@ -65,3 +65,18 @@ export const createMemoryTools = (store: ChatMemoryStore): CahciuaTool[] => {
     }),
   ];
 };
+
+export const createQqPrivateMemoryTool = (read: (groups: string[], keys?: string[]) => unknown): CahciuaTool => createTool({
+  name: 'recall_qq_group_memories',
+  description: 'In an OneBot private chat, read the explicitly configured memories for this QQ user from selected groups. Group IDs are limited by local configuration; use this to continue a group conversation privately.',
+  execution: { lane: 'serial' },
+  parameters: {
+    type: 'object', additionalProperties: false,
+    properties: {
+      group_ids: { type: 'array', items: { type: 'string', pattern: '^[0-9]+$' }, minItems: 1, maxItems: 20, uniqueItems: true },
+      keys: { type: 'array', items: { type: 'string', minLength: 1, maxLength: MEMORY_LIMITS.keyLength }, minItems: 1, maxItems: 10, uniqueItems: true },
+    },
+    required: ['group_ids'],
+  },
+  execute: input => result(() => read((input as { group_ids: string[] }).group_ids, (input as { keys?: string[] }).keys)),
+});

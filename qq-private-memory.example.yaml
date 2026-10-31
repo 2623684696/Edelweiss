@@ -1,0 +1,13 @@
+# 复制为 qq-private-memory.yaml 后按需编辑。
+# 可选：通过 QQ_PRIVATE_MEMORY_CONFIG_PATH=/path/to/file.yaml 指定其他路径。
+# 本文件控制 OneBot 私聊中的群记忆只读权限。
+users:
+  # key 是私聊用户的 QQ 号。
+  '123456789':
+    # 允许这个用户请求读取记忆的群号。
+    groups:
+      - '100000001'
+      - '100000002'
+    # 可选：限制只能读取指定的记忆 key。省略时允许读取 user:<QQ号>:*。
+    # keys:
+    #   - user:123456789:profile

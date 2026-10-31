@@ -98,6 +98,18 @@ describe('createToolsForCapabilities send routing', () => {
     expect(names('subagent')).not.toContain('forget_memory');
     expect(names('subagent')).not.toContain('recall_memories');
   });
+
+  it('offers configured QQ private memory only in matching private chats', () => {
+    const toolDeps = deps('onebot', vi.fn());
+    toolDeps.chatId = 'private:42';
+    toolDeps.qqPrivateMemory = { groups: ['100'], read: vi.fn() };
+    const capabilities = createDefaultTurnCapabilities('main');
+    expect(createToolsForCapabilities(toolDeps, capabilities).map(tool => tool.function.name))
+      .toContain('recall_qq_group_memories');
+    toolDeps.chatId = 'private:43';
+    expect(createToolsForCapabilities(toolDeps, capabilities).map(tool => tool.function.name))
+      .not.toContain('recall_qq_group_memories');
+  });
   it('refuses Telegram fallback for a OneBot chat without an adapter', async () => {
     const telegramSend = vi.fn(async () => ({ messageId: 1, date: 1 }));
     const capabilities = createDefaultTurnCapabilities('main');

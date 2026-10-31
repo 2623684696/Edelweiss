@@ -267,6 +267,35 @@ export interface ResolvedChatConfig {
 }
 
 const CONFIG_PATH = process.env.CONFIG_PATH ?? 'config.yaml';
+const QQ_PRIVATE_MEMORY_CONFIG_PATH = process.env.QQ_PRIVATE_MEMORY_CONFIG_PATH ?? 'qq-private-memory.yaml';
+
+export interface QqPrivateMemoryRule {
+  groups: string[];
+  keys?: string[];
+}
+
+export type QqPrivateMemoryConfig = Record<string, QqPrivateMemoryRule>;
+
+export const loadQqPrivateMemoryConfig = (): QqPrivateMemoryConfig => {
+  try {
+    const raw = readFileSync(QQ_PRIVATE_MEMORY_CONFIG_PATH, 'utf-8');
+    const parsed = parseYaml(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const users = (parsed as { users?: unknown }).users;
+    if (!users || typeof users !== 'object' || Array.isArray(users)) return {};
+    return Object.fromEntries(Object.entries(users as Record<string, unknown>).flatMap(([userId, value]) => {
+      if (!/^\d+$/.test(userId) || !value || typeof value !== 'object' || Array.isArray(value)) return [];
+      const groups = (value as { groups?: unknown }).groups;
+      if (!Array.isArray(groups) || groups.some(group => typeof group !== 'string' || !/^\d+$/.test(group))) return [];
+      const keys = (value as { keys?: unknown }).keys;
+      if (keys !== undefined && (!Array.isArray(keys) || keys.some(key => typeof key !== 'string' || !key.trim()))) return [];
+      return [[userId, { groups: [...new Set(groups)], ...(keys ? { keys: [...new Set(keys)] } : {}) }]] as const;
+    }));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {};
+    throw new Error(`Failed to load ${QQ_PRIVATE_MEMORY_CONFIG_PATH}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+};
 
 export const loadConfig = (): Config => {
   const raw = readFileSync(CONFIG_PATH, 'utf-8');

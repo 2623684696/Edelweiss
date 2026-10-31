@@ -1,6 +1,6 @@
 export { createDatabase, createReadonlyDatabase, runMigrations } from './client';
 export type { DB } from './client';
-export { createChatMemoryStore } from './chat-memory';
+export { createChatMemoryStore, readQqGroupMemories } from './chat-memory';
 export type { ChatMemory, ChatMemoryStore } from './chat-memory';
 export { codec } from './codec';
 export { migrateV1ToV2 } from './migrate-v2';

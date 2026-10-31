@@ -7,6 +7,7 @@ import type { SkillInfo } from './skills';
 import { createAskForImageTool, createBashTool, createAttachmentDownloader, createDownloadFileTool, createKillTaskTool, createReadImageTool, createReadTaskOutputTool, createSendMessageTool, createSleepTool, createWebFetchTool, createWebSearchTool, createStaySilentTool, createReactMessageTool, createEnterFocusTool, createMemoryTools } from './tools';
 import type { CahciuaTool, SendMessageAttachment, SendMessageTurnFlags } from './tools';
 import { createPokeUserTool } from './tools/poke-user';
+import { createQqPrivateMemoryTool } from './tools/memory';
 import type { DriverSignal, TurnCapabilities, TurnState } from './turn-state';
 import type { PlatformAdapter } from './types';
 import { createWebFetcher } from './web-fetch';
@@ -34,6 +35,7 @@ export interface CapabilityToolProviderDeps {
   resolveModel: (name: string) => LlmEndpoint;
   imageConversations: ImageConversationManager;
   memory?: ChatMemoryStore;
+  qqPrivateMemory?: { groups: string[]; keys?: string[]; read: (groups: string[], keys?: string[]) => unknown };
   backgroundTask: {
     startTask: (typeName: string, sessionId: string, params: unknown, intention: string | undefined, timeoutMs: number) => number;
     killTask: (taskId: number) => { ok: boolean; error?: string };
@@ -220,5 +222,15 @@ export const createToolsForCapabilities = (
     ...createAskForImageTools(),
     ...createBackgroundTaskTools(),
     ...(capabilities.canManageMemory && deps.memory ? createMemoryTools(deps.memory) : []),
+    ...(capabilities.canManageMemory && chatConfig.platform === 'onebot' && chatId.startsWith('private:') && deps.qqPrivateMemory
+      ? [createQqPrivateMemoryTool((groups, keys) => {
+          const allowed = new Set(deps.qqPrivateMemory!.groups);
+          const selected = groups.filter(group => allowed.has(group));
+          if (selected.length !== groups.length) throw new Error('One or more group IDs are not allowed by qq-private-memory.yaml');
+          const configuredKeys = deps.qqPrivateMemory!.keys;
+          if (keys?.some(key => configuredKeys && !configuredKeys.includes(key))) throw new Error('One or more memory keys are not allowed by qq-private-memory.yaml');
+          return deps.qqPrivateMemory!.read(selected, keys);
+        })]
+      : []),
   ];
 };

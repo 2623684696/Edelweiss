@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createMemoryTools } from './memory';
+import { createMemoryTools, createQqPrivateMemoryTool } from './memory';
 import type { ChatMemoryStore } from '../../db/chat-memory';
 import { MEMORY_LIMITS, MemoryCapacityError } from '../../db/chat-memory';
 
@@ -8,6 +8,15 @@ const makeStore = (): ChatMemoryStore => ({ list: vi.fn(() => []), recall: vi.fn
 const options = { toolCallId: 'test' };
 
 describe('memory tools', () => {
+  it('reads configured QQ group memories through an explicit group list', async () => {
+    const read = vi.fn(() => [{ groupId: '100', key: 'user:42:profile' }]);
+    const tool = createQqPrivateMemoryTool(read);
+    expect(tool.validate({ group_ids: ['100'] }).valid).toBe(true);
+    expect(tool.validate({ group_ids: [] }).valid).toBe(false);
+    await tool.execute({ group_ids: ['100'], keys: ['user:42:profile'] }, options);
+    expect(read).toHaveBeenCalledWith(['100'], ['user:42:profile']);
+  });
+
   it('validates inputs and does not accept an arbitrary chat or platform', () => {
     const tools = createMemoryTools(makeStore());
     const remember = tools[0]!;

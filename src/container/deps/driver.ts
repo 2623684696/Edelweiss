@@ -1,5 +1,6 @@
 import { getChatIds, resolveChatConfig, resolveModel } from '../../config/config';
-import { createChatMemoryStore, loadCompaction, loadTurnResponses, persistCompaction, persistTurnResponse } from '../../db';
+import { createChatMemoryStore, loadCompaction, loadTurnResponses, persistCompaction, persistTurnResponse, readQqGroupMemories } from '../../db';
+import { loadQqPrivateMemoryConfig } from '../../config/config';
 import { createDriver } from '../../driver';
 import type { Registrar } from '../registrar';
 import { TOKENS } from '../tokens';
@@ -15,6 +16,7 @@ export default function registerDriver({ get, register }: Registrar): void {
     const onebot = get(TOKENS.ONEBOT);
     const backgroundTaskManager = get(TOKENS.BACKGROUND_TASK_MANAGER);
     const chatIds = getChatIds(config);
+    const qqPrivateMemory = loadQqPrivateMemoryConfig();
 
     return createDriver({
       chatIds,
@@ -63,6 +65,10 @@ export default function registerDriver({ get, register }: Registrar): void {
       resolveModel: name => resolveModel(config, name),
       imageConversations: get(TOKENS.IMAGE_CONVERSATION_MANAGER),
       getChatMemoryStore: (platform, chatId) => createChatMemoryStore(db, platform, chatId),
+      getQqPrivateMemory: userId => {
+        const rule = qqPrivateMemory[userId];
+        return rule ? { ...rule, read: (groups, keys) => readQqGroupMemories(db, userId, groups, keys) } : undefined;
+      },
       backgroundTask: {
         startTask: (typeName, sessionId, params, intention, timeoutMs) =>
           backgroundTaskManager.startTask(typeName, sessionId, params, intention, timeoutMs),

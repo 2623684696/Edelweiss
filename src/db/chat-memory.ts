@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, like } from 'drizzle-orm';
 
 import type { DB } from './client';
 import { chatMemories } from './schema';
@@ -34,6 +34,23 @@ export interface ChatMemoryStore {
   recall(keys: string[]): ChatMemory[];
   forget(key: string): boolean;
 }
+
+export const readQqGroupMemories = (db: DB, userId: string, groupIds: string[], keys?: string[]) => {
+  const prefix = `user:${userId}:`;
+  const conditions = [eq(chatMemories.platform, 'onebot'), inArray(chatMemories.chatId, groupIds), like(chatMemories.key, `${prefix}%`)];
+  if (keys?.length) conditions.push(inArray(chatMemories.key, keys));
+  return db.select({
+    groupId: chatMemories.chatId, key: chatMemories.key, content: chatMemories.content, summary: chatMemories.summary,
+    reason: chatMemories.reason, source: chatMemories.source, updatedAtMs: chatMemories.updatedAtMs,
+    expiresAtMs: chatMemories.expiresAtMs,
+  }).from(chatMemories).where(and(...conditions)).orderBy(asc(chatMemories.chatId), asc(chatMemories.key)).all().map(memory => ({
+    ...memory,
+    expired: memory.expiresAtMs != null && memory.expiresAtMs <= Date.now(),
+    content: memory.expiresAtMs != null && memory.expiresAtMs <= Date.now()
+      ? memory.summary ?? memory.content.slice(0, 100)
+      : memory.content,
+  }));
+};
 
 const normalize = (value: string, label: string, limit: number): string => {
   const normalized = value.trim();

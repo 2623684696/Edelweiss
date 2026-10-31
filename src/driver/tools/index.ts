@@ -16,7 +16,7 @@ export { createReactMessageTool } from './react-message';
 export { createPokeUserTool } from './poke-user';
 export { createReadImageTool } from './read-image';
 export { createAskForImageTool } from './ask-for-image';
-export { createMemoryTools } from './memory';
+export { createMemoryTools, createQqPrivateMemoryTool } from './memory';
 export { createSleepTool } from './sleep';
 export { createEnterFocusTool } from './focus-mode';
 

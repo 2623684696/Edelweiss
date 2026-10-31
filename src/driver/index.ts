@@ -66,6 +66,7 @@ export const createDriver = (config: DriverConfig, deps: {
   resolveModel: (name: string) => LlmEndpoint;
   imageConversations: ImageConversationManager;
   getChatMemoryStore?: (platform: string, chatId: string) => ChatMemoryStore;
+  getQqPrivateMemory?: (userId: string) => { groups: string[]; keys?: string[]; read: (groups: string[], keys?: string[]) => unknown } | undefined;
   backgroundTask: {
     startTask: (typeName: string, sessionId: string, params: unknown, intention: string | undefined, timeoutMs: number) => number;
     killTask: (taskId: number) => { ok: boolean; error?: string };
@@ -206,6 +207,7 @@ export const createDriver = (config: DriverConfig, deps: {
       resolveModel: deps.resolveModel,
       imageConversations: deps.imageConversations,
       memory,
+      qqPrivateMemory: chatId.startsWith('private:') ? deps.getQqPrivateMemory?.(chatId.slice('private:'.length)) : undefined,
       backgroundTask: {
         startTask: deps.backgroundTask.startTask,
         killTask: deps.backgroundTask.killTask,
