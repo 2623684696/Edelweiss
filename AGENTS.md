@@ -42,7 +42,7 @@ Long-term chat memory now uses a summary-only per-turn index and explicit keyed 
 
 OneBot private chats can optionally expose selected group-scoped person memories through the untracked local `qq-private-memory.yaml` file (copy `qq-private-memory.example.yaml`); `QQ_PRIVATE_MEMORY_CONFIG_PATH` overrides its path. Rules map a private-chat QQ ID to allowed group IDs and optional exact `user:<QQ ID>:` memory keys. The `recall_qq_group_memories` tool is read-only and only appears for configured OneBot private chats.
 
-The optional `models.image2` endpoint supplies only the OpenAI-compatible image API base URL and key; `chats.*.tools.image2.model` selects the drawing model. The `image2` tool (`src/driver/tools/image2.ts`) calls `images/generations` and sends the generated PNG to the current chat. Both settings are commented out in `config.yaml` and `config.example.yaml`.
+The optional `models.image2` endpoint overrides only the OpenAI-compatible image API base URL and key; when absent, `image2` reuses the current chat's primary endpoint. `chats.*.tools.image2.model` selects the drawing model and enables the tool. The `image2` tool (`src/driver/tools/image2.ts`) calls `images/generations`, or `images/edits` when given an attachment `file_id`, then returns a persistent local PNG path for the main model to send later via `send_message` (so an interrupted in-flight request is not repeated).
 
 | Layer | Status | Notes |
 |-------|--------|-------|

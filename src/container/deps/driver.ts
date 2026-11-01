@@ -64,10 +64,12 @@ export default function registerDriver({ get, register }: Registrar): void {
         : undefined,
       resolveModel: name => resolveModel(config, name),
       getImage2Endpoint: chatId => {
-        const chatTools = resolveChatConfig(config, chatId).tools.image2;
-        const endpoint = config.models.image2;
-        if (!chatTools?.model || !endpoint?.apiBaseUrl || !endpoint.apiKey) return undefined;
-        return { ...endpoint, model: chatTools.model };
+        const chatConfig = resolveChatConfig(config, chatId);
+        const modelName = chatConfig.tools.image2?.model;
+        if (!modelName) return undefined;
+        const primary = chatConfig.primaryModel;
+        const override = config.models.image2;
+        return { ...(override ?? primary), model: modelName };
       },
       imageConversations: get(TOKENS.IMAGE_CONVERSATION_MANAGER),
       getChatMemoryStore: (platform, chatId) => createChatMemoryStore(db, platform, chatId),
