@@ -144,6 +144,7 @@ export const createDriver = (config: DriverConfig, deps: {
     const chatLoopBlocked = signal(false);
     const failedRc = signal<RenderedContext | null>(null);
     const focusMode = signal(false);
+    let offlineCommandVersion = 0;
     const scheduler = createSchedulerState();
 
     // --- Skills state ---
@@ -288,6 +289,7 @@ export const createDriver = (config: DriverConfig, deps: {
       reactionEmojis: [],
       flags: {
         wasOfflineAtStart,
+        offlineCommandVersionAtStart: offlineCommandVersion,
         interruptedByInput: false,
         sendMessageWasLengthLimited: false,
         modelStayedSilent: false,
@@ -362,7 +364,9 @@ export const createDriver = (config: DriverConfig, deps: {
             schedulerController.clearAbortController(stepAbortController);
             if (turn?.scope.activeTurn === turn && turn) turn.scope.activeTurn = null;
             if (focusMode()) focusMode(false);
-            if (wasOffline) offline(false);
+            if (wasOffline && turn
+              && turn.flags.offlineCommandVersionAtStart === offlineCommandVersion)
+              offline(false);
             running(false);
           }
         }
@@ -560,6 +564,7 @@ export const createDriver = (config: DriverConfig, deps: {
       compactionMeta,
       chatLoopBlocked,
       focusMode,
+      offlineCommandVersion,
       scheduler,
       activeTurn: null,
       extendDebounce: () => schedulerController.extendDebounce(),
@@ -590,7 +595,9 @@ export const createDriver = (config: DriverConfig, deps: {
 
   const setOfflineMode = (chatId: string, isOffline: boolean) => {
     if (!chatIds.has(chatId)) return;
-    getOrCreateScope(chatId).offline(isOffline);
+    const scope = getOrCreateScope(chatId);
+    scope.offlineCommandVersion++;
+    scope.offline(isOffline);
     log.withFields({ chatId, offline: isOffline }).log('Offline mode changed');
   };
 

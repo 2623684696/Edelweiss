@@ -19,7 +19,8 @@ export const createCleanupFeature = (deps: MainTurnFeatureDeps): DriverFeature =
     turn.scope.activeTurn = null;
     deps.running(false);
     if (deps.focusMode()) deps.focusMode(false);
-    if (turn.flags.wasOfflineAtStart) {
+    if (turn.flags.wasOfflineAtStart
+      && turn.flags.offlineCommandVersionAtStart === turn.scope.offlineCommandVersion) {
       deps.offline(false);
       deps.log.withFields({ chatId: deps.chatId }).log('Offline mode: auto-returning to online after response');
     }

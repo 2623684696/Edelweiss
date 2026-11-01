@@ -96,6 +96,8 @@ export interface ChatScope {
   compactionMeta: DriverSignal<CompactionSessionMeta | null>;
   chatLoopBlocked: DriverSignal<boolean>;
   focusMode: DriverSignal<boolean>;
+  /** Increments for every explicit /offline or /online command. */
+  offlineCommandVersion: number;
   scheduler: SchedulerState;
   activeTurn: TurnState | null;
   extendDebounce(): void;
@@ -124,6 +126,7 @@ export interface TurnState {
   reactionEmojis: string[];
   flags: {
     wasOfflineAtStart: boolean;
+    offlineCommandVersionAtStart?: number;
     interruptedByInput: boolean;
     sendMessageWasLengthLimited: boolean;
     modelStayedSilent: boolean;
