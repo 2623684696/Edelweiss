@@ -72,7 +72,14 @@ export const runTurnStepLoop = async (
     if (hasProtectedTool) turn.scope.scheduler.abortLocked = true;
 
     const toolResults = await params.runner.executeToolStep(modelOutput.toolCalls, stepParams);
-    turn.abortController.signal.throwIfAborted();
+    // image2 can finish after a newer message aborts the turn while it is waiting
+    // for the image API. Keep that completed step so the next turn does not see
+    // the same assistant tool call without a result and execute it twice. Other
+    // tools retain the normal interruption behavior below.
+    const allowInterruptedCompletion = modelOutput.toolCalls.some(tc => tc.name === 'image2');
+    const interruptedAfterToolExecution = turn.abortController.signal.aborted && allowInterruptedCompletion;
+    if (turn.abortController.signal.aborted && !allowInterruptedCompletion)
+      turn.abortController.signal.throwIfAborted();
     const stepEntries = [...modelOutput.entries, ...toolResults];
     const usage = modelOutput.usage;
     const requestedAtMs = modelOutput.requestedAtMs;
@@ -130,6 +137,8 @@ export const runTurnStepLoop = async (
         turn.abortController.abort(new Error('Deferred: new messages arrived during protected step'));
       }
     }
+    if (interruptedAfterToolExecution)
+      break;
     turn.abortController.signal.throwIfAborted();
 
     if (!hasToolCalls || !anyRequiresFollowUp) {

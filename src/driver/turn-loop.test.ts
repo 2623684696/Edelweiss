@@ -76,6 +76,39 @@ const createTurn = (): TurnState => ({
 });
 
 describe('runTurnStepLoop', () => {
+  it('persists a completed tool result when input interrupts during tool execution', async () => {
+    const turn = createTurn();
+    const rawMessage = assistantToolCall('draw this');
+    rawMessage.parts[1] = { kind: 'toolCall', callId: 'call-1', name: 'image2', args: '{}' };
+    const rawToolResult = toolResult('{"ok":true}', true);
+    const persisted: ConversationEntry[][] = [];
+    const runner = {
+      callModelStep: vi.fn(async () => ({
+        entries: [rawMessage],
+        toolCalls: [rawMessage.parts[1] as Extract<OutputMessage['parts'][number], { kind: 'toolCall' }>],
+        usage,
+        requestedAtMs: 100,
+      })),
+      executeToolStep: vi.fn(async () => {
+        // This is what happens when a new external message aborts a running tool.
+        turn.abortController.abort(new Error('new input'));
+        return [rawToolResult];
+      }),
+    };
+
+    await runTurnStepLoop(createTurnContext(turn), {
+      runner,
+      executorChatId: 'chat',
+      log,
+      persistStep: (_, step) => {
+        persisted.push(step.persistedEntries);
+      },
+    });
+
+    expect(persisted).toEqual([[rawMessage, rawToolResult]]);
+    expect(runner.callModelStep).toHaveBeenCalledTimes(1);
+  });
+
   it('persists transformed entries while continuing with raw entries', async () => {
     const turn = createTurn();
     const rawMessage = assistantToolCall('raw thinking');

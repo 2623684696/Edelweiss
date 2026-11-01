@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -15,29 +15,42 @@ const fail = (message: string): ToolResult => ({
 });
 
 export const createImage2Tool = (
-  endpoint: LlmEndpoint,
-  send: (text: string, attachments: [{ type: 'photo'; path: string; file_name?: string }]) => Promise<{ messageId: string }>,
+  endpoint: LlmEndpoint | undefined,
+  downloadAttachment: (fileId: string) => Promise<Buffer>,
 ): CahciuaTool => createTool({
   name: 'image2',
-  description: 'Generate an image from a prompt with the configured image2 endpoint, then send it to the current chat.',
+  description: 'Generate an image and return a local attachment path. After generation, decide when to send it with send_message using attachments: [{"type":"photo","path":"<returned path>"}]. Pass file_id from the current QQ image attachment to transform or edit that image.',
   execution: { lane: 'message' },
   parameters: {
     type: 'object', additionalProperties: false,
     properties: {
       prompt: { type: 'string', minLength: 1, maxLength: 4000 },
+      file_id: { type: 'string', description: 'Optional image attachment file_id, including OneBot ob:... IDs.' },
       size: { type: 'string', enum: ['auto', '1024x1024', '1536x1024', '1024x1536'] },
       quality: { type: 'string', enum: ['auto', 'low', 'medium', 'high'] },
     },
     required: ['prompt'],
   },
   execute: async input => {
-    const { prompt, size, quality } = input as { prompt: string; size?: string; quality?: string };
-    const url = `${endpoint.apiBaseUrl.replace(/\/+$/, '')}/images/generations`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.apiKey}` },
-      body: JSON.stringify({ ...(endpoint.extraBody ?? {}), model: endpoint.model, prompt, ...(size ? { size } : {}), ...(quality ? { quality } : {}) }),
-    });
+    const { prompt, file_id, size, quality } = input as { prompt: string; file_id?: string; size?: string; quality?: string };
+    if (!endpoint) return fail('image2 is not configured for this chat; set tools.image2.model');
+    const baseUrl = endpoint.apiBaseUrl.replace(/\/+$/, '');
+    const response = file_id
+      ? await (async () => {
+        const source = await downloadAttachment(file_id);
+        const form = new FormData();
+        form.append('model', endpoint.model);
+        form.append('prompt', prompt);
+        if (size) form.append('size', size);
+        if (quality) form.append('quality', quality);
+        form.append('image', new Blob([source], { type: 'image/png' }), 'input.png');
+        return await fetch(`${baseUrl}/images/edits`, { method: 'POST', headers: { Authorization: `Bearer ${endpoint.apiKey}` }, body: form });
+      })()
+      : await fetch(`${baseUrl}/images/generations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.apiKey}` },
+        body: JSON.stringify({ ...(endpoint.extraBody ?? {}), model: endpoint.model, prompt, ...(size ? { size } : {}), ...(quality ? { quality } : {}) }),
+      });
     if (!response.ok) return fail(`Image generation failed (${response.status}): ${(await response.text()).slice(0, 500)}`);
     const payload = await response.json() as ImageGenerationResponse;
     const image = payload.data?.[0];
@@ -45,15 +58,11 @@ export const createImage2Tool = (
 
     const directory = await mkdtemp(join(tmpdir(), 'edelweiss-image2-'));
     const path = join(directory, 'generated.png');
-    try {
-      const bytes = image.b64_json
-        ? Buffer.from(image.b64_json, 'base64')
-        : Buffer.from(await (await fetch(image.url!)).arrayBuffer());
-      await writeFile(path, bytes);
-      const sent = await send('', [{ type: 'photo', path, file_name: 'generated.png' }]);
-      return { content: JSON.stringify({ ok: true, message_id: sent.messageId }), requiresFollowUp: true };
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
+    const bytes = image.b64_json
+      ? Buffer.from(image.b64_json, 'base64')
+      : Buffer.from(await (await fetch(image.url!)).arrayBuffer());
+    await writeFile(path, bytes);
+    // Keep the file available for the main model's later send_message call.
+    return { content: JSON.stringify({ ok: true, attachment_path: path, file_name: 'generated.png' }), requiresFollowUp: true };
   },
 });

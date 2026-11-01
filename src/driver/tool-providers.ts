@@ -234,15 +234,8 @@ export const createToolsForCapabilities = (
           return deps.qqPrivateMemory!.read(selected, keys);
         })]
       : []),
-    ...(capabilities.canSendMessage && deps.image2
-      ? [createImage2Tool(deps.image2, async (text, attachments) => {
-          if (!deps.getPlatformAdapter && chatConfig.platform === 'onebot') throw new Error('OneBot adapter unavailable');
-          const adapter = deps.getPlatformAdapter?.(chatId);
-          if (adapter) return await adapter.sendMessage(chatId, text, { attachments });
-          if (chatConfig.platform === 'onebot') throw new Error('OneBot adapter unavailable; refusing Telegram fallback');
-          const sent = await deps.sendMessage(chatId, text, undefined, attachments);
-          return { messageId: String(sent.messageId) };
-        })]
+    ...(capabilities.canSendMessage && chatConfig.tools.image2
+      ? [createImage2Tool(deps.image2, downloadAttachment)]
       : []),
   ];
 };
