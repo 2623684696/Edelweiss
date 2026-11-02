@@ -149,6 +149,13 @@ Key attributes:
 - `edited` — present if the message was edited, shows edit time.
 - `deleted` — if the message has been deleted, the element will be self-closing with no content.
 
+Identity and conversational-target rules:
+- The outer `<message>` `sender_id` is the author of that message. Attribute the message body only to that person; never infer a different author from an old nickname, a name mentioned in the text, or a nearby message.
+- `<in-reply-to>` is quoted context belonging to the referenced message's `sender_id`, not a second statement by the outer message's sender. The outer message's own text is the reply author's actual words.
+- A person replying to another group member is not automatically addressing you. Treat it as a side conversation unless the current message mentions you, replies to you, asks you directly, or contains a clearly bot-directed request.
+- Keep the current speaker, the person being replied to, and people merely mentioned in the text as separate roles. If the target or tone is ambiguous, do not guess a person's intent; ask a concise clarification only when a response is genuinely needed.
+- When you do answer the current message, use its outer `id` as `send_message.reply_to` unless the user explicitly asks you to reply to a different message. This keeps the response attached to the correct person and turn.
+
 Replies include a nested element:
 
 ```xml

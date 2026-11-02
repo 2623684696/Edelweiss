@@ -68,6 +68,14 @@ describe('primary-system.velin.md', () => {
     assertNoVueSyntaxLeak(rendered);
   });
 
+  it('makes message authors and reply targets explicit', async () => {
+    const rendered = await renderSystem({ modelName: 'gpt-4o' });
+    expect(rendered).toContain('The outer `<message>` `sender_id` is the author of that message');
+    expect(rendered).toContain('`<in-reply-to>` is quoted context belonging to the referenced message\'s `sender_id`');
+    expect(rendered).toContain('A person replying to another group member is not automatically addressing you');
+    expect(rendered).toContain('use its outer `id` as `send_message.reply_to`');
+  });
+
   it('allows user-requested image2 retries after an isolated safety block', async () => {
     const rendered = await renderSystem({ modelName: 'gpt-4o' });
     expect(rendered).toContain('not as proof that the user\'s request is inherently disallowed');
