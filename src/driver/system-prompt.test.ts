@@ -133,7 +133,7 @@ describe('primary-system.velin.md', () => {
     expect(rendered).toContain('Allowed reaction emoji: 👍 ❤️');
     expect(rendered).not.toMatch(/😁|🖕|😇/u);
     expect(rendered).toContain('low-disturbance alternative');
-    expect(rendered).toContain('use `react_message` if one fits');
+    expect(rendered).toContain('prefer `react_message`');
     expect(rendered).toContain('Do not also send a text explanation when the reaction alone carries the intent');
     assertNoVueSyntaxLeak(rendered);
   });
@@ -158,7 +158,7 @@ describe('primary-system.velin.md', () => {
     expect(rendered).not.toContain('Allowed reaction emoji');
     expect(rendered).not.toContain('Telegram reaction');
     expect(rendered).not.toContain('reaction_added');
-    expect(rendered).toContain('When in doubt, stay silent.');
+    expect(rendered).toContain('uncertainty alone is not a reason to suppress a relevant, natural response');
     assertNoVueSyntaxLeak(rendered);
   });
 
