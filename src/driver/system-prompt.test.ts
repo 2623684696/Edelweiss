@@ -68,6 +68,14 @@ describe('primary-system.velin.md', () => {
     assertNoVueSyntaxLeak(rendered);
   });
 
+  it('allows user-requested image2 retries after an isolated safety block', async () => {
+    const rendered = await renderSystem({ modelName: 'gpt-4o' });
+    expect(rendered).toContain('not as proof that the user\'s request is inherently disallowed');
+    expect(rendered).toContain('If the user explicitly asks to retry');
+    expect(rendered).toContain('never create an automatic retry loop');
+    expect(rendered).toContain('If the request is clearly prohibited');
+  });
+
   it('renders chat metadata after the current channel', async () => {
     const rendered = await renderSystem({ chatId: '-100123', chatName: 'Edelweiss Group', modelName: 'gpt-4o' });
     expect(rendered.indexOf('chat_name: Edelweiss Group')).toBeGreaterThan(rendered.indexOf('current-channel: telegram'));
