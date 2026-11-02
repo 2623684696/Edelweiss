@@ -111,6 +111,9 @@ const isVisualAttachment = (att: CanonicalAttachment): boolean =>
   ['photo', 'sticker', 'animation', 'video', 'video_note'].includes(att.type)
   || att.mimeType?.toLowerCase().startsWith('image/') === true;
 
+const visualAttachmentCount = (attachments: CanonicalAttachment[]): number =>
+  attachments.reduce((count, att) => count + (isVisualAttachment(att) ? 1 : 0), 0);
+
 const renderAttachment = (att: CanonicalAttachment, messageId: string, index: number, imageOrder?: number): string => {
   const attrs: string[] = [`type="${att.type}"`];
   if (att.mimeType) attrs.push(`mime="${escapeXml(att.mimeType)}"`);
@@ -305,7 +308,15 @@ export const render = (ic: IntermediateContext, params: RenderParams = {}): Rend
   let imageOrder = 1;
 
   for (const node of ic.nodes) {
-    if (params.compactCursorMs != null && node.receivedAtMs < params.compactCursorMs) continue;
+    // Keep image-order stable when the viewport moves forward (for example
+    // after compaction): skipped historical messages still consume their
+    // chronological image numbers.
+    if (node.type === 'message') {
+      if (params.compactCursorMs != null && node.receivedAtMs < params.compactCursorMs) {
+        imageOrder += visualAttachmentCount(node.attachments);
+        continue;
+      }
+    } else if (params.compactCursorMs != null && node.receivedAtMs < params.compactCursorMs) continue;
 
     if (node.type === 'message') {
       const { content, imageCount, isMyself, isSelfSent, mentionsMe, repliesToMe, isAssociatedChannelPost } = renderMessage(node, params, imageOrder);

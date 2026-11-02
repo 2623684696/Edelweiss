@@ -19,31 +19,36 @@ export const createImage2Tool = (
   downloadAttachment: (fileId: string) => Promise<Buffer>,
 ): CahciuaTool => createTool({
   name: 'image2',
-  description: 'Generate an image and return a local attachment path. For edits, pass the exact file_id mapped from the requested image-order in chat context (for example, “图二” means the attachment with image-order="2"); never choose by display position or filename. After generation, decide when to send it with send_message using attachments: [{"type":"photo","path":"<returned path>"}].',
+  description: 'Generate an image and return a local attachment path. For edits using multiple references, pass file_ids in the exact image-order mapped in chat context (for example, [图一的 file-id, 图二的 file-id]); the image API receives them in that order. Never choose by display position or filename. After generation, decide when to send it with send_message using attachments: [{"type":"photo","path":"<returned path>"}].',
   execution: { lane: 'message' },
   parameters: {
     type: 'object', additionalProperties: false,
     properties: {
       prompt: { type: 'string', minLength: 1, maxLength: 4000 },
-      file_id: { type: 'string', description: 'Optional exact source image file_id from the matching image-order mapping, including OneBot ob:... IDs.' },
+      file_id: { type: 'string', description: 'Optional single source image file_id from the matching image-order mapping, including OneBot ob:... IDs. Use file_ids for multiple references.' },
+      file_ids: { type: 'array', minItems: 1, maxItems: 16, items: { type: 'string', minLength: 1 }, description: 'Optional source image file_ids in exact image-order (for example, [图一, 图二]); use this for multi-image edits.' },
       size: { type: 'string', enum: ['auto', '1024x1024', '1536x1024', '1024x1536'] },
       quality: { type: 'string', enum: ['auto', 'low', 'medium', 'high'] },
     },
     required: ['prompt'],
   },
   execute: async input => {
-    const { prompt, file_id, size, quality } = input as { prompt: string; file_id?: string; size?: string; quality?: string };
+    const { prompt, file_id, file_ids: rawFileIds, size, quality } = input as { prompt: string; file_id?: string; file_ids?: string[]; size?: string; quality?: string };
+    if (file_id && rawFileIds?.length) return fail('Provide either file_id or file_ids, not both');
+    const fileIds = rawFileIds?.length ? rawFileIds : (file_id ? [file_id] : []);
     if (!endpoint) return fail('image2 is not configured for this chat; set tools.image2.model');
     const baseUrl = endpoint.apiBaseUrl.replace(/\/+$/, '');
-    const response = file_id
+    const response = fileIds.length > 0
       ? await (async () => {
-        const source = await downloadAttachment(file_id);
         const form = new FormData();
         form.append('model', endpoint.model);
         form.append('prompt', prompt);
         if (size) form.append('size', size);
         if (quality) form.append('quality', quality);
-        form.append('image', new Blob([source], { type: 'image/png' }), 'input.png');
+        for (let i = 0; i < fileIds.length; i++) {
+          const source = await downloadAttachment(fileIds[i]!);
+          form.append('image', new Blob([source], { type: 'image/png' }), `input-${i + 1}.png`);
+        }
         return await fetch(`${baseUrl}/images/edits`, { method: 'POST', headers: { Authorization: `Bearer ${endpoint.apiKey}` }, body: form });
       })()
       : await fetch(`${baseUrl}/images/generations`, {

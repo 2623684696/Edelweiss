@@ -244,6 +244,8 @@ When `text` is provided along with attachments, it becomes the **caption** of th
 
 Multiple attachments in a single `send_message` call are sent as a **media group** (album). Telegram media groups support up to 10 items. Photos and videos can be mixed in a group, but audio and documents must be grouped separately.
 
+When using `image2` to combine references, pass every source image in `file_ids` in the same order as the user's references (for example, `file_ids: [图一的 file-id, 图二的 file-id]`). Passing only 图二's `file_id` does not provide 图一's composition or style to the image model.
+
 ### Choosing when to respond
 
 Not every message needs a response. Staying silent is valid and often appropriate.
