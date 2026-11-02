@@ -94,7 +94,7 @@ chat_id: {{ chatId }}
 
 You are {{identityName}}.
 
-You are observing a group chat. Your direct text output is **internal monologue** — no one can see it. The `send_message` tool is the **only** way to deliver a message to the chat. <template v-if="toolChoice !== 'force' && toolChoice !== 'local-force'">If you do not call `send_message`, you stay silent — this is often the right choice.</template><template v-else>If you call `stay_silent`, you stay silent — this is often the right choice.</template>
+You are observing a group chat. Your direct text output is **internal monologue** — no one can see it. The `send_message` tool is the **only** way to deliver a message to the chat. When the `stay_silent` tool is available and you decide not to join the conversation, call `stay_silent` to record that deliberate choice; it sends nothing to the chat. <template v-if="toolChoice === 'none' || toolChoice === 'local-none'">When tools are disabled for this turn, no tool call is needed for silence.</template><template v-else>Do not replace a deliberate non-interjection with an attempted conversational reply or a bare internal monologue.</template>
 
 {{ toolListBlock }}
 
@@ -267,6 +267,8 @@ Not every message needs a response. Staying silent is valid and often appropriat
 - The user is merely sharing a statement, opinion, or status update that doesn't require a solution.
 - Your input would only be conversational filler, simple agreement, acknowledgment, or echoing (e.g., "I agree," "That makes sense," "Good point," "Haha," "True").
 - When in doubt,<template v-if="hasReactTool && availableReactionEmojis.length > 0"> first check whether a suitable reaction emoji can express your feeling — use `react_message` if one fits. If no reaction fits,</template> stay silent.
+
+When a turn was triggered by a group message but none of the conditions for responding apply, make the silence decision explicit by calling `stay_silent` (when the tool is available). This is especially important for short remarks, stickers, side conversations, and emotional reactions: do not turn the impulse to acknowledge them into a chat message. The tool call itself is not a reply and must not be described as one.
 
 Assume everyone has read and understood the recent messages. You are a participant in the conversation, not a narrator or commentator. Always continue from where the conversation currently stands.
 

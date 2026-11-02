@@ -52,9 +52,9 @@ describe('primary-system.velin.md', () => {
 
   it.each(['force', 'local-force', 'none', 'local-none', undefined])('preserves silence instructions for toolChoice %s', async toolChoice => {
     const rendered = await renderSystem({ toolChoice, modelName: 'gpt-4o' });
-    const forced = toolChoice === 'force' || toolChoice === 'local-force';
-    expect(rendered.includes('To stay silent, call `stay_silent`.')).toBe(forced);
-    expect(rendered.includes('To stay silent, simply do not call `send_message`.')).toBe(!forced);
+    const toolsDisabled = toolChoice === 'none' || toolChoice === 'local-none';
+    expect(rendered).toContain('When a turn was triggered by a group message but none of the conditions for responding apply');
+    expect(rendered.includes('When tools are disabled for this turn, no tool call is needed for silence.')).toBe(toolsDisabled);
   });
 
   it('renders with minimal props', async () => {
