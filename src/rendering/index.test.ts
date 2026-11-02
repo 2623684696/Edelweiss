@@ -276,7 +276,7 @@ describe('render', () => {
         replyToSender: bob,
         replyToPreview: 'previous message',
       })])));
-      expect(result).toContain('<in-reply-to id="99" sender="Bob (2)">previous message</in-reply-to>');
+      expect(result).toContain('<in-reply-to id="99" sender="Bob (2)" sender_id="2">previous message</in-reply-to>');
     });
 
     it('renders in-reply-to without sender when not available', () => {
@@ -382,7 +382,7 @@ describe('render', () => {
       expect(rc[0]!.content).toHaveLength(1);
       expect(rc[0]!.content[0]).toEqual({
         type: 'text',
-        text: '<message id="42" sender="Alice (@alice)" t="2025-03-12T14:30:00+08:00">\nhello\n<image type="photo" size="800x600" file-id="42:0">a cat sleeping on a windowsill</image>\n</message>',
+        text: '<message id="42" sender="Alice (@alice)" sender_id="1" t="2025-03-12T14:30:00+08:00">\nhello\n<image type="photo" size="800x600" file-id="42:0">a cat sleeping on a windowsill</image>\n</message>',
       });
     });
 

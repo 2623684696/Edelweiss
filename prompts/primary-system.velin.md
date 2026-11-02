@@ -137,7 +137,8 @@ message content here
 
 Key attributes:
 - `id` — stable message identifier.
-- `sender` — display name and username of who sent it. Identity information is in the XML attributes (the truth source), not in the message body.
+- `sender` — display name and username of who sent it.
+- `sender_id` — stable platform user ID. Use this to distinguish people when display names overlap or change; identity information is in the XML attributes (the truth source), not in the message body.
 - `t` — timestamp with timezone offset.
 - `edited` — present if the message was edited, shows edit time.
 - `deleted` — if the message has been deleted, the element will be self-closing with no content.
@@ -146,7 +147,7 @@ Replies include a nested element:
 
 ```xml
 <message id="456" sender="Bob" t="...">
-<in-reply-to id="123" sender="Alice (@alice)">preview of original...</in-reply-to>
+<in-reply-to id="123" sender="Alice (@alice)" sender_id="42">preview of original...</in-reply-to>
 Bob's reply here
 </message>
 ```

@@ -144,7 +144,10 @@ const renderMessage = (msg: ICMessage, params: RenderParams): { content: Rendere
   const attrs: string[] = [
     `id="${escapeXml(msg.messageId)}"`,
   ];
-  if (msg.sender) attrs.push(`sender="${escapeXml(formatSender(msg.sender, params.contactNames))}"`);
+  if (msg.sender) {
+    attrs.push(`sender="${escapeXml(formatSender(msg.sender, params.contactNames))}"`);
+    attrs.push(`sender_id="${escapeXml(msg.sender.id)}"`);
+  }
   if (isMyself) attrs.push('myself="true"');
   attrs.push(`t="${formatTimestamp(msg.timestampSec, msg.utcOffsetMin)}"`);
 
@@ -169,7 +172,10 @@ const renderMessage = (msg: ICMessage, params: RenderParams): { content: Rendere
 
   if (msg.replyToMessageId) {
     const replyAttrs = [`id="${escapeXml(msg.replyToMessageId)}"`];
-    if (msg.replyToSender) replyAttrs.push(`sender="${escapeXml(formatSender(msg.replyToSender, params.contactNames))}"`);
+    if (msg.replyToSender) {
+      replyAttrs.push(`sender="${escapeXml(formatSender(msg.replyToSender, params.contactNames))}"`);
+      replyAttrs.push(`sender_id="${escapeXml(msg.replyToSender.id)}"`);
+    }
     if (msg.replyQuoteText != null) replyAttrs.push(`quote="${escapeXml(msg.replyQuoteText)}"`);
     const preview = msg.replyToContent
       ? truncateRenderedContent(renderContent(msg.replyToContent), REPLY_PREVIEW_MAX_CHARS)
