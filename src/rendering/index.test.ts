@@ -339,7 +339,7 @@ describe('render', () => {
       const result = xml(render(ic([message({
         attachments: [{ type: 'photo', width: 800, height: 600 }],
       })])));
-      expect(result).toContain('<attachment type="photo" size="800x600" file-id="42:0"/>');
+      expect(result).toContain('<attachment type="photo" size="800x600" image-order="1" file-id="42:0"/>');
     });
 
     it('renders attachment with mime and name', () => {
@@ -364,9 +364,10 @@ describe('render', () => {
       })]));
       expect(rc).toHaveLength(1);
       const pieces = rc[0]!.content;
-      expect(pieces).toHaveLength(2);
+      expect(pieces).toHaveLength(3);
       expect(pieces[0]!.type).toBe('text');
-      expect(pieces[1]!.type).toBe('image');
+      expect(pieces[1]).toEqual({ type: 'text', text: '<image-preview image-order="1" file-id="42:0"/>' });
+      expect(pieces[2]!.type).toBe('image');
     });
 
     it('renders inline image alt text and omits image content piece', () => {
@@ -382,7 +383,7 @@ describe('render', () => {
       expect(rc[0]!.content).toHaveLength(1);
       expect(rc[0]!.content[0]).toEqual({
         type: 'text',
-        text: '<message id="42" sender="Alice (@alice)" sender_id="1" t="2025-03-12T14:30:00+08:00">\nhello\n<image type="photo" size="800x600" file-id="42:0">a cat sleeping on a windowsill</image>\n</message>',
+        text: '<message id="42" sender="Alice (@alice)" sender_id="1" t="2025-03-12T14:30:00+08:00">\nhello\n<image type="photo" size="800x600" image-order="1" file-id="42:0">a cat sleeping on a windowsill</image>\n</message>',
       });
     });
 
@@ -395,7 +396,7 @@ describe('render', () => {
         }],
       })]));
       expect((rc[0]!.content[0] as { text: string }).text)
-        .toContain('<image type="photo" image-id="img_abc" file-id="42:0">a cat</image>');
+        .toContain('<image type="photo" image-id="img_abc" image-order="1" file-id="42:0">a cat</image>');
     });
 
     it('shows [thumbnail] placeholder in rcToXml', () => {
@@ -415,9 +416,11 @@ describe('render', () => {
         ],
       })]));
       const pieces = rc[0]!.content;
-      expect(pieces).toHaveLength(3); // 1 text + 2 images
-      expect(pieces[1]!.type).toBe('image');
+      expect(pieces).toHaveLength(5); // 1 message + 2 mapping markers + 2 images
+      expect(pieces[1]).toEqual({ type: 'text', text: '<image-preview image-order="1" file-id="42:0"/>' });
       expect(pieces[2]!.type).toBe('image');
+      expect(pieces[3]).toEqual({ type: 'text', text: '<image-preview image-order="2" file-id="42:1"/>' });
+      expect(pieces[4]!.type).toBe('image');
     });
 
     it('skips image piece when no thumbnail', () => {

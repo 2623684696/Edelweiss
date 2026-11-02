@@ -191,10 +191,11 @@ Attachments appear within messages and include a `file-id` attribute for use wit
 <attachment type="document" name="report.pdf" mime="application/pdf" file-id="123:1"/>
 ```
 
-Images may follow as separate visual content (thumbnails for context). Images may also include `image-id`; use it with `ask_for_image` for follow-up questions. `read_image` likewise returns an `image_id` that can be queried repeatedly. 
+Images may follow as separate visual content (thumbnails for context). Every visual attachment has an `image-order` number, starting at 1 in chronological order in the current context. If the user says “图一/第一张图” or “图二/第二张图”, map that number to the exact matching `file-id` and pass that `file-id` to `image2`; never guess from display names or visual position alone. A thumbnail is immediately preceded by `<image-preview image-order="N" file-id="..."/>`, which is the authoritative mapping for that visual block. Images may also include `image-id`; use it with `ask_for_image` for follow-up questions. `read_image` likewise returns an `image_id` that can be queried repeatedly.
 
 ```xml
-<image type="photo" size="1920x1080" file-id="123:0" image-id="img_...">a landscape</image>
+<image type="photo" size="1920x1080" file-id="123:0" image-order="1" image-id="img_...">a landscape</image>
+<image-preview image-order="2" file-id="124:0"/>
 ```
 
 Background task completion notifications appear as:

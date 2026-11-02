@@ -107,7 +107,11 @@ const truncateRenderedContent = (content: string, maxLen: number): string => {
 
 // --- Attachment → XML ---
 
-const renderAttachment = (att: CanonicalAttachment, messageId: string, index: number): string => {
+const isVisualAttachment = (att: CanonicalAttachment): boolean =>
+  ['photo', 'sticker', 'animation', 'video', 'video_note'].includes(att.type)
+  || att.mimeType?.toLowerCase().startsWith('image/') === true;
+
+const renderAttachment = (att: CanonicalAttachment, messageId: string, index: number, imageOrder?: number): string => {
   const attrs: string[] = [`type="${att.type}"`];
   if (att.mimeType) attrs.push(`mime="${escapeXml(att.mimeType)}"`);
   if (att.fileName) attrs.push(`name="${escapeXml(att.fileName)}"`);
@@ -115,6 +119,7 @@ const renderAttachment = (att: CanonicalAttachment, messageId: string, index: nu
   if (att.duration != null) attrs.push(`duration="${att.duration}"`);
   if (att.stickerSetName) attrs.push(`pack="${escapeXml(att.stickerSetName)}"`);
   if (att.imageId) attrs.push(`image-id="${escapeXml(att.imageId)}"`);
+  if (imageOrder != null) attrs.push(`image-order="${imageOrder}"`);
   if (att.fileRef)
     attrs.push(`file-id="ob:${escapeXml(Buffer.from(att.fileRef).toString('base64'))}"`);
   else
@@ -135,7 +140,7 @@ const hasMention = (nodes: ContentNode[], userId: string): boolean =>
 
 // --- ICNode → content pieces ---
 
-const renderMessage = (msg: ICMessage, params: RenderParams): { content: RenderedContentPiece[]; isMyself: boolean; isSelfSent: boolean; mentionsMe: boolean; repliesToMe: boolean; isAssociatedChannelPost: boolean } => {
+const renderMessage = (msg: ICMessage, params: RenderParams, imageOrderStart: number): { content: RenderedContentPiece[]; imageCount: number; isMyself: boolean; isSelfSent: boolean; mentionsMe: boolean; repliesToMe: boolean; isAssociatedChannelPost: boolean } => {
   const isMyself = !!msg.isMyself;
   const isSelfSent = !!msg.isSelfSent;
   const mentionsMe = !!(params.botUserId && hasMention(msg.content, params.botUserId));
@@ -165,7 +170,7 @@ const renderMessage = (msg: ICMessage, params: RenderParams): { content: Rendere
 
   if (msg.deleted) {
     attrs.push('deleted="true"');
-    return { content: [{ type: 'text', text: `<message ${attrs.join(' ')}/>` }], isMyself, isSelfSent, mentionsMe, repliesToMe, isAssociatedChannelPost };
+    return { content: [{ type: 'text', text: `<message ${attrs.join(' ')}/>` }], imageCount: 0, isMyself, isSelfSent, mentionsMe, repliesToMe, isAssociatedChannelPost };
   }
 
   const parts: string[] = [];
@@ -186,20 +191,32 @@ const renderMessage = (msg: ICMessage, params: RenderParams): { content: Rendere
   const body = renderContent(msg.content);
   if (body) parts.push(body);
 
+  let imageCount = 0;
+  const imageOrders: (number | undefined)[] = msg.attachments.map(att => {
+    if (!isVisualAttachment(att)) return undefined;
+    return imageOrderStart + imageCount++;
+  });
   for (let i = 0; i < msg.attachments.length; i++)
-    parts.push(renderAttachment(msg.attachments[i]!, msg.messageId, i));
+    parts.push(renderAttachment(msg.attachments[i]!, msg.messageId, i, imageOrders[i]));
 
   const pieces: RenderedContentPiece[] = [
     { type: 'text', text: `<message ${attrs.join(' ')}>\n${parts.join('\n')}\n</message>` },
   ];
 
   // Append thumbnail images as separate content pieces (Driver converts to provider format)
-  for (const att of msg.attachments) {
-    if (!att.altText && att.thumbnailWebp)
+  for (let i = 0; i < msg.attachments.length; i++) {
+    const att = msg.attachments[i]!;
+    const imageOrder = imageOrders[i];
+    if (imageOrder != null && !att.altText && att.thumbnailWebp) {
+      const fileId = att.fileRef
+        ? `ob:${Buffer.from(att.fileRef).toString('base64')}`
+        : `${msg.messageId}:${i}`;
+      pieces.push({ type: 'text', text: `<image-preview image-order="${imageOrder}" file-id="${escapeXml(fileId)}"/>` });
       pieces.push({ type: 'image', image: sharp(Buffer.from(att.thumbnailWebp, 'base64')) });
+    }
   }
 
-  return { content: pieces, isMyself, isSelfSent, mentionsMe, repliesToMe, isAssociatedChannelPost };
+  return { content: pieces, imageCount, isMyself, isSelfSent, mentionsMe, repliesToMe, isAssociatedChannelPost };
 };
 
 const renderBlockedMessage = (msg: ICBlockedMessage): RenderedContentPiece[] => {
@@ -285,12 +302,14 @@ const renderRuntimeEvent = (event: ICRuntimeEvent): string => {
 
 export const render = (ic: IntermediateContext, params: RenderParams = {}): RenderedContext => {
   const segments: RenderedContextSegment[] = [];
+  let imageOrder = 1;
 
   for (const node of ic.nodes) {
     if (params.compactCursorMs != null && node.receivedAtMs < params.compactCursorMs) continue;
 
     if (node.type === 'message') {
-      const { content, isMyself, isSelfSent, mentionsMe, repliesToMe, isAssociatedChannelPost } = renderMessage(node, params);
+      const { content, imageCount, isMyself, isSelfSent, mentionsMe, repliesToMe, isAssociatedChannelPost } = renderMessage(node, params, imageOrder);
+      imageOrder += imageCount;
       segments.push({ receivedAtMs: node.receivedAtMs, content, ...(isMyself && { isMyself }), ...(isSelfSent && { isSelfSent }), ...(mentionsMe && { mentionsMe }), ...(repliesToMe && { repliesToMe }), ...(isAssociatedChannelPost && { isAssociatedChannelPost }) });
     } else if (node.type === 'blocked_message') {
       segments.push({ receivedAtMs: node.receivedAtMs, content: renderBlockedMessage(node) });

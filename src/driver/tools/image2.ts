@@ -19,13 +19,13 @@ export const createImage2Tool = (
   downloadAttachment: (fileId: string) => Promise<Buffer>,
 ): CahciuaTool => createTool({
   name: 'image2',
-  description: 'Generate an image and return a local attachment path. After generation, decide when to send it with send_message using attachments: [{"type":"photo","path":"<returned path>"}]. Pass file_id from the current QQ image attachment to transform or edit that image.',
+  description: 'Generate an image and return a local attachment path. For edits, pass the exact file_id mapped from the requested image-order in chat context (for example, “图二” means the attachment with image-order="2"); never choose by display position or filename. After generation, decide when to send it with send_message using attachments: [{"type":"photo","path":"<returned path>"}].',
   execution: { lane: 'message' },
   parameters: {
     type: 'object', additionalProperties: false,
     properties: {
       prompt: { type: 'string', minLength: 1, maxLength: 4000 },
-      file_id: { type: 'string', description: 'Optional image attachment file_id, including OneBot ob:... IDs.' },
+      file_id: { type: 'string', description: 'Optional exact source image file_id from the matching image-order mapping, including OneBot ob:... IDs.' },
       size: { type: 'string', enum: ['auto', '1024x1024', '1536x1024', '1024x1536'] },
       quality: { type: 'string', enum: ['auto', 'low', 'medium', 'high'] },
     },
