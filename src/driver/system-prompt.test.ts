@@ -92,7 +92,7 @@ describe('primary-system.velin.md', () => {
     const rendered = await renderLateBinding({
       timeNow: '2025-01-01T00:00:00Z',
       image2Available: true,
-      oneBotImage2Requested: true,
+      image2Requested: true,
     });
     expect(rendered).toContain('not proof that an otherwise allowed request is permanently disallowed');
     expect(rendered).toContain('Retry only when the user explicitly requests it');

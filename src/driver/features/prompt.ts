@@ -34,7 +34,7 @@ export const createPromptFeature = (deps: MainTurnFeatureDeps): DriverFeature =>
       isReplied,
       isAssociatedChannelPost,
       image2Available: ctx.scratch.image2Available,
-      oneBotImage2Requested: ctx.scratch.oneBotImage2Requested,
+      image2Requested: ctx.scratch.image2Requested,
       recentSendMessageHumanLikenessXml: ctx.scratch.recentSendMessageHumanLikenessXml,
       isInterrupted,
       activeBackgroundTasks: deps.getActiveBackgroundTasks(deps.chatId),

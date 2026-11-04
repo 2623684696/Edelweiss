@@ -171,6 +171,8 @@ export interface DriverSchedulerOptions {
   typingExtendMs: number;
   maxDelayMs: number;
   startTurn: (turn: StartedTurnInfo) => void;
+  /** Optional hard gate for chats that only accept a specific command-shaped input. */
+  isContextEligible?: (rc: RenderedContext, afterMs: number) => boolean;
   onDebounceStateChange?: (chatId: string, isDebouncing: boolean) => void;
   log: Logger;
   now?: () => number;
@@ -212,6 +214,8 @@ export interface SchedulingSnapshot {
   lastTypingAtMs: number;
   activeRunRc: RenderedContext | null;
   activeRunInterruptCursorMs: number;
+  contextEligible?: boolean;
+  interruptEligible?: boolean;
 }
 
 export interface SchedulingConfig {
@@ -226,6 +230,7 @@ export interface SchedulingConfig {
  */
 const needsReply = (snapshot: SchedulingSnapshot): boolean => {
   const { rc } = snapshot;
+  if (snapshot.contextEligible === false) return false;
   if (rc.length === 0) return false;
   if (rc === snapshot.failedRc) return false;
   if (snapshot.lastTRInterrupted) return true;
@@ -249,6 +254,7 @@ const hasInterruptingInputDuringActiveRun = (snapshot: SchedulingSnapshot): bool
   );
   return snapshot.activeRunRc != null
     && snapshot.rc !== snapshot.activeRunRc
+    && snapshot.interruptEligible !== false
     && latestInterruptingExternalEventMs(snapshot.rc, interruptAfterMs) != null;
 };
 
@@ -284,6 +290,9 @@ export const evaluateScheduling = (
     }
     return { type: 'idle', reason: 'turn-running', resetBatch: false };
   }
+
+  if (snapshot.contextEligible === false)
+    return { type: 'idle', reason: 'context-not-eligible', resetBatch: true };
 
   if (cause === 'wake')
     return { type: 'start', reason: 'explicit-wake' };
@@ -334,22 +343,29 @@ export const createDriverScheduler = (
     now,
   });
 
-  const readSnapshot = (): SchedulingSnapshot => ({
-    rc: scope.rc(),
-    offline: scope.offline(),
-    running: scope.running(),
-    chatLoopBlocked: scope.chatLoopBlocked(),
-    lastProcessedMs: scope.lastProcessedMs(),
-    lastTRInterrupted: scope.lastTRInterrupted(),
-    failedRc: scope.failedRc(),
-    focusMode: scope.focusMode(),
-    debounceWaiting: state.debounceWaiting,
-    replyBatchDeadlineMs: state.replyBatchDeadlineMs,
-    startNextDebounceWithExtendDelay: state.startNextDebounceWithExtendDelay,
-    lastTypingAtMs: state.lastTypingAtMs,
-    activeRunRc: state.activeRunRc,
-    activeRunInterruptCursorMs: state.activeRunInterruptCursorMs,
-  });
+  const readSnapshot = (): SchedulingSnapshot => {
+    const rc = scope.rc();
+    const lastProcessedMs = scope.lastProcessedMs();
+    const interruptAfterMs = Math.max(lastProcessedMs, state.activeRunInterruptCursorMs);
+    return {
+      rc,
+      offline: scope.offline(),
+      running: scope.running(),
+      chatLoopBlocked: scope.chatLoopBlocked(),
+      lastProcessedMs,
+      lastTRInterrupted: scope.lastTRInterrupted(),
+      failedRc: scope.failedRc(),
+      focusMode: scope.focusMode(),
+      debounceWaiting: state.debounceWaiting,
+      replyBatchDeadlineMs: state.replyBatchDeadlineMs,
+      startNextDebounceWithExtendDelay: state.startNextDebounceWithExtendDelay,
+      lastTypingAtMs: state.lastTypingAtMs,
+      activeRunRc: state.activeRunRc,
+      activeRunInterruptCursorMs: state.activeRunInterruptCursorMs,
+      contextEligible: options.isContextEligible?.(rc, lastProcessedMs),
+      interruptEligible: options.isContextEligible?.(rc, interruptAfterMs),
+    };
+  };
 
   const notifyDebounceStopped = (): void => {
     if (state.debounceWaiting)

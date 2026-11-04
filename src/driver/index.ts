@@ -4,6 +4,7 @@ import { computed, effect, signal } from 'alien-signals';
 import { runCompaction } from './compaction';
 import { composeContext, findWorkingWindowCursor, wasToolLoopInterrupted } from './context';
 import { createMainTurnFeatures } from './features/main';
+import { hasExplicitImage2Request } from './image2-command';
 import type { ImApiInvoker } from './im-api/types';
 import { renderSubagentSystemPrompt, renderSystemPrompt } from './prompt';
 import { createRunner, toToolSchema } from './runner';
@@ -430,6 +431,9 @@ export const createDriver = (config: DriverConfig, deps: {
       typingExtendMs,
       maxDelayMs,
       startTurn: executeLlmCall,
+      isContextEligible: chatConfig.tools.image2?.only
+        ? hasExplicitImage2Request
+        : undefined,
       onDebounceStateChange: deps.onDebounceStateChange,
       log,
     });

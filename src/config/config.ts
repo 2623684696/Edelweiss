@@ -112,7 +112,11 @@ const ChatConfigSchema = v.object({
         apiKey: v.optional(v.string(), ''),
       }), {}),
     })),
-    image2: v.optional(v.object({ model: v.optional(v.string()) })),
+    image2: v.optional(v.object({
+      model: v.optional(v.string()),
+      /** Disable ordinary chat turns; only an explicit @bot /image2 message may wake this chat. */
+      only: v.optional(v.boolean(), false),
+    })),
   }),
 });
 
@@ -190,7 +194,7 @@ const ChatOverrideSchema = v.optional(v.partial(v.object({
         apiKey: v.string(),
       })),
     })),
-    image2: v.partial(v.object({ model: v.string() })),
+    image2: v.partial(v.object({ model: v.string(), only: v.boolean() })),
   })),
 })), {});
 
@@ -285,7 +289,7 @@ export interface ResolvedChatConfig {
     bash: { backgroundThresholdSec: number; compactOutput: boolean };
     webSearch: { tavilyKey: string };
     webFetch?: WebFetchConfig;
-    image2?: { model?: string };
+    image2?: { model?: string; only: boolean };
   };
 }
 
@@ -411,7 +415,9 @@ export const resolveChatConfig = (config: Config, chatId: string): ResolvedChatC
       webFetch: merged.tools.webFetch
         ? { provider: merged.tools.webFetch.provider, jina: { apiKey: merged.tools.webFetch.jina.apiKey } }
         : undefined,
-      image2: merged.tools.image2 ? { model: merged.tools.image2.model } : undefined,
+      image2: merged.tools.image2
+        ? { model: merged.tools.image2.model, only: merged.tools.image2.only }
+        : undefined,
     },
   };
 };

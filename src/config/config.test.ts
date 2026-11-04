@@ -56,6 +56,15 @@ describe('disabledReactions config', () => {
 });
 
 describe('tool selection config', () => {
+  it('supports an inherited image2-only chat gate with per-chat overrides', () => {
+    const config = loadFixture({
+      default: { tools: { webSearch: { tavilyKey: 'test' }, image2: { model: 'image' } } },
+      images: { tools: { image2: { only: true } } },
+    });
+    expect(resolveChatConfig(config, 'other').tools.image2?.only).toBe(false);
+    expect(resolveChatConfig(config, 'images').tools.image2?.only).toBe(true);
+  });
+
   it('defaults to automatic selection and three local-force retries', () => {
     const endpoint = loadFixture().models.primary!;
     expect(endpoint.toolChoice).toBeUndefined();

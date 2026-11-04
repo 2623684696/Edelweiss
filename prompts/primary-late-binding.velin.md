@@ -7,7 +7,7 @@ const props = defineProps({
   isReplied: { type: Boolean, default: false },
   isAssociatedChannelPost: { type: Boolean, default: false },
   image2Available: { type: Boolean, default: false },
-  oneBotImage2Requested: { type: Boolean, default: false },
+  image2Requested: { type: Boolean, default: false },
   recentSendMessageHumanLikenessXml: { type: String, default: '' },
   isInterrupted: { type: Boolean, default: false },
   activeBackgroundTasks: { type: Array, default: () => [] },
@@ -57,7 +57,7 @@ Someone replied to your message — you will likely want to respond.
 </template>
 
 <template v-if="image2Available">
-<template v-if="oneBotImage2Requested">The latest OneBot input explicitly invoked `@bot /image2`. Treat the text after `/image2` as a direct image-generation request. When it contains enough information, call `image2` and then deliver the generated file with `send_message`; do not merely describe how to draw it. If the requested image is genuinely underspecified, ask one concise clarification instead.</template>
+<template v-if="image2Requested">The latest input explicitly invoked `@bot /image2`. Treat the text after `/image2` as a direct image-generation request. When it contains enough information, call `image2` and then deliver the generated file with `send_message`; do not merely describe how to draw it. If the requested image is genuinely underspecified, ask one concise clarification instead.</template>
 
 When the request refers to numbered images, use the exact `file-id` mapped by each adjacent `<image-preview>` marker. To combine references, pass every source image in `file_ids` in the same order as the user's references.
 

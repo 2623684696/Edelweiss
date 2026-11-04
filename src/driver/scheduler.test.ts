@@ -89,6 +89,21 @@ describe('evaluateScheduling', () => {
     expect(evaluateScheduling({ ...running, focusMode: true }, 'context-updated', 1_000, schedulingConfig))
       .toMatchObject({ type: 'idle', reason: 'turn-running' });
   });
+
+  it('keeps ineligible context idle and does not let it interrupt a running turn', () => {
+    expect(evaluateScheduling(snapshot({ contextEligible: false }), 'context-updated', 1_000, schedulingConfig))
+      .toMatchObject({ type: 'idle', reason: 'context-not-eligible' });
+    expect(evaluateScheduling(snapshot({ contextEligible: false }), 'wake', 1_000, schedulingConfig))
+      .toMatchObject({ type: 'idle', reason: 'context-not-eligible' });
+    expect(evaluateScheduling(snapshot({
+      rc: rc(100, 200),
+      running: true,
+      activeRunRc: rc(100),
+      activeRunInterruptCursorMs: 100,
+      interruptEligible: false,
+    }), 'context-updated', 1_000, schedulingConfig))
+      .toMatchObject({ type: 'idle', reason: 'turn-running' });
+  });
 });
 
 describe('createSchedulerStateController', () => {
