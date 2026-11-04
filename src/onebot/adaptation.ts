@@ -108,6 +108,7 @@ const adaptSegment = async (
   seg: OneBotMessageSegment,
   attachments: CanonicalAttachment[],
   options: OneBotAdaptationOptions,
+  selfId?: string,
 ): Promise<ContentNode | ContentNode[] | null> => {
   switch (seg.type) {
   case 'text':
@@ -123,11 +124,11 @@ const adaptSegment = async (
     if (userId === 'all') return { type: 'text', text: '@全体成员' };
     try {
       const userMentioned = await api.getGroupMemberInfo(chatId, userId);
-      return { type: 'mention', userId, children: [{ type: 'text', text: `@${userMentioned.displayName}` }] };
+      return { type: 'mention', userId, ...(userId === selfId && { isMyself: true }), children: [{ type: 'text', text: `@${userMentioned.displayName}` }] };
     } catch (err) {
       if (!options.onMentionLookupFailure) throw err;
       options.onMentionLookupFailure(err, userId);
-      return { type: 'mention', userId, children: [{ type: 'text', text: `@${userId}` }] };
+      return { type: 'mention', userId, ...(userId === selfId && { isMyself: true }), children: [{ type: 'text', text: `@${userId}` }] };
     }
   }
 
@@ -319,7 +320,7 @@ export const adaptOneBotMessage = async (
       content.push(await adaptForward(api, chatId, seg.data.id, seg.data.content, attachments, options));
       continue;
     }
-    const node = await adaptSegment(api, chatId, seg, attachments, options);
+    const node = await adaptSegment(api, chatId, seg, attachments, options, String(event.self_id));
     if (node) content.push(...Array.isArray(node) ? node : [node]);
   }
 

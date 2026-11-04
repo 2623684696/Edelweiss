@@ -500,6 +500,27 @@ describe('adaptOneBotMessage', () => {
       .toContain('@Bot');
   });
 
+  it('marks a live mention of the OneBot self id independently of Telegram render params', async () => {
+    const api = {
+      getFriendRemark: vi.fn(async () => undefined),
+      getGroupMemberInfo: vi.fn(async () => ({ id: '999', displayName: 'Bot', isBot: true })),
+    } as unknown as OneBotApiClient;
+    const event: OneBotMessageEvent = {
+      post_type: 'message', message_type: 'group', time: 1, self_id: 999,
+      user_id: 42, group_id: 100, message_id: 7, raw_message: '@Bot /image2 test',
+      sender: { user_id: 42, nickname: 'sender' },
+      message: [
+        { type: 'at', data: { qq: '999' } },
+        { type: 'text', data: { text: ' /image2 test' } },
+      ],
+    };
+
+    const adapted = await adaptOneBotMessage(api, event, { receivedAtMs: 1000, utcOffsetMin: 480 });
+    expect(adapted.content[0]).toMatchObject({ type: 'mention', userId: '999', isMyself: true });
+    const rc = render(reduce(createEmptyIC('100'), adapted), { botUserId: 'telegram-bot-id' });
+    expect(rc[0]?.mentionsMe).toBe(true);
+  });
+
   it('propagates get_forward_msg failures to the existing ingress retry policy', async () => {
     const api = {
       getFriendRemark: vi.fn(async () => undefined),

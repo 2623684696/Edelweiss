@@ -150,7 +150,7 @@ const renderAttachment = (att: CanonicalAttachment, messageId: string, index: nu
 
 const hasMention = (nodes: ContentNode[], userId: string): boolean =>
   nodes.some(n =>
-    (n.type === 'mention' && n.userId === userId)
+    (n.type === 'mention' && (n.isMyself || n.userId === userId))
     || ('children' in n && hasMention(n.children, userId)));
 
 // --- ICNode → content pieces ---
