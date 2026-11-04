@@ -73,7 +73,14 @@ describe('primary-system.velin.md', () => {
     expect(rendered).toContain('The outer `<message>` `sender_id` is the author of that message');
     expect(rendered).toContain('`<in-reply-to>` is quoted context belonging to the referenced message\'s `sender_id`');
     expect(rendered).toContain('A person replying to another group member is not automatically addressing you');
+    expect(rendered).toContain('extends your immediately preceding contribution');
     expect(rendered).toContain('use its outer `id` as `send_message.reply_to`');
+  });
+
+  it('allows natural callbacks when the group continues the bot\'s own joke', async () => {
+    const rendered = await renderSystem({ modelName: 'gpt-4o' });
+    expect(rendered).toContain('picks up, answers, corrects, or extends your immediately preceding contribution');
+    expect(rendered).toContain('a callback, playful escalation, or fresh punchline; that is not repetition');
   });
 
   it('allows user-requested image2 retries after an isolated safety block', async () => {
