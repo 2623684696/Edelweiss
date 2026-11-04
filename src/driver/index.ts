@@ -4,12 +4,15 @@ import { computed, effect, signal } from 'alien-signals';
 import { runCompaction } from './compaction';
 import { composeContext, findWorkingWindowCursor, wasToolLoopInterrupted } from './context';
 import { createMainTurnFeatures } from './features/main';
+import type { ImApiInvoker } from './im-api/types';
 import { renderSubagentSystemPrompt, renderSystemPrompt } from './prompt';
 import { createRunner, toToolSchema } from './runner';
 import { createDriverScheduler } from './scheduler';
+import type { StartedTurnInfo } from './scheduler';
 import { loadSkillsFromFolder } from './skills';
 import { createAgentMailbox } from './subagents/mailbox';
 import { createSubagentManager } from './subagents/manager';
+import type { AgentId, AgentMessage, SubagentState } from './subagents/types';
 import { createToolsForCapabilities } from './tool-providers';
 import type { CapabilityToolProviderDeps } from './tool-providers';
 import type { CahciuaTool, SendMessageAttachment, SendMessageTurnFlags } from './tools';
@@ -50,6 +53,18 @@ const MAX_STEPS = Infinity;
 export const createDriver = (config: DriverConfig, deps: {
   loadTurnResponses: (chatId: string, afterMs?: number, agentId?: string) => Promise<TurnResponseV2[]>;
   persistTurnResponse: (chatId: string, tr: TurnResponseV2) => Promise<void>;
+  persistSubagent?: (chatId: string, record: {
+    agentId: AgentId;
+    task: string;
+    status: SubagentState['status'];
+    modelName: string;
+    createdAtMs: number;
+    updatedAtMs: number;
+    finalMessage?: string;
+  }) => void;
+  persistSubagentMessage?: (chatId: string, message: AgentMessage) => number | undefined;
+  markSubagentMessagesDelivered?: (chatId: string, messageIds: number[]) => void;
+  loadNextSubagentId?: (chatId: string) => number;
   sendMessage: (chatId: string, text: string, replyToMessageId?: number, attachments?: SendMessageAttachment[]) => Promise<{ messageId: number; date: number }>;
   loadCompaction: (chatId: string) => CompactionSessionMeta | null;
   persistCompaction: (chatId: string, meta: CompactionSessionMeta) => void;
@@ -76,6 +91,7 @@ export const createDriver = (config: DriverConfig, deps: {
   };
   getPlatformAdapter?: (chatId: string) => PlatformAdapter | undefined;
   getChatName?: (chatId: string) => Promise<string>;
+  getImApiInvoker?: (chatId: string) => ImApiInvoker | undefined;
   onDebounceStateChange?: (chatId: string, isDebouncing: boolean) => void;
   logger: Logger;
 }) => {
@@ -134,12 +150,35 @@ export const createDriver = (config: DriverConfig, deps: {
     };
 
     const rc = signal<RenderedContext>([]);
-    const mailbox = createAgentMailbox();
+    const mailbox = createAgentMailbox({
+      onEnqueue: message => {
+        const persistedId = deps.persistSubagentMessage?.(chatId, message);
+        if (persistedId != null) message.persistedId = persistedId;
+      },
+      onFlush: messages => {
+        const messageIds = messages
+          .map(message => message.persistedId)
+          .filter((id): id is number => id != null);
+        if (messageIds.length > 0) deps.markSubagentMessagesDelivered?.(chatId, messageIds);
+      },
+    });
     const offline = signal(false);
     const lastProcessedMs = signal(0);
     const lastTRInterrupted = signal(false);
-    void getLastProcessedTime(chatId).then(v => lastProcessedMs(Math.max(lastProcessedMs(), v)));
-    void loadTRs(chatId).then(trs => lastTRInterrupted(wasToolLoopInterrupted(trs)));
+    void getLastProcessedTime(chatId).then(v => {
+      const next = Math.max(lastProcessedMs(), v);
+      if (next !== lastProcessedMs()) {
+        lastProcessedMs(next);
+        schedulerController.onStateUpdated();
+      }
+    });
+    void loadTRs(chatId).then(trs => {
+      const next = wasToolLoopInterrupted(trs);
+      if (next !== lastTRInterrupted()) {
+        lastTRInterrupted(next);
+        schedulerController.onStateUpdated();
+      }
+    });
     const running = signal(false);
     const chatLoopBlocked = signal(false);
     const failedRc = signal<RenderedContext | null>(null);
@@ -153,10 +192,9 @@ export const createDriver = (config: DriverConfig, deps: {
       ? loadSkillsFromFolder(chatConfig.skills.folder, { log })
       : new Map();
 
-    // --- Compaction state as signal ---
-    // Initialized from DB on scope creation (cold start). Updated by the
-    // compaction effect when it completes. Read by the reply effect to
-    // get cursor + summary. No runtime DB queries.
+    // --- Compaction 状态 ---
+    // Scope 创建时从数据库初始化，之后由 compaction 结果更新。
+    // 上下文组装过程直接读取内存中的 cursor 和 summary。
     const compactionMeta = signal<CompactionSessionMeta | null>(
       deps.loadCompaction(chatId),
     );
@@ -242,6 +280,7 @@ export const createDriver = (config: DriverConfig, deps: {
       model: chatConfig.subagents.model,
       maxConcurrent: chatConfig.subagents.maxConcurrent,
       maxSteps: chatConfig.subagents.maxSteps,
+      initialNextId: deps.loadNextSubagentId?.(chatId),
       getScope,
       renderSystemPrompt: state => renderSubagentSystemPrompt({
         modelName: chatConfig.subagents.model.model,
@@ -260,6 +299,15 @@ export const createDriver = (config: DriverConfig, deps: {
           agentId,
         });
       },
+      persistLifecycle: state => deps.persistSubagent?.(chatId, {
+        agentId: state.id,
+        task: state.task,
+        status: state.status,
+        modelName: chatConfig.subagents.model.model,
+        createdAtMs: state.createdAtMs,
+        updatedAtMs: state.updatedAtMs,
+        finalMessage: state.finalMessage,
+      }),
       wakeMain,
       log,
     });
@@ -297,12 +345,8 @@ export const createDriver = (config: DriverConfig, deps: {
       },
     });
 
-    // Called from timer callbacks to start the async LLM work.
-    const executeLlmCall = () => {
-      const turnStart = schedulerController.beginTurn();
-      if (!turnStart) return;
-      const { rcAtStart, wasOffline } = turnStart;
-
+    // Scheduler 已经占用 chat loop，异步 LLM Turn 的启动由此函数负责。
+    const executeLlmCall = ({ rcAtStart, wasOffline }: StartedTurnInfo) => {
       void (async () => {
         const stepAbortController = new AbortController();
         let turn: TurnState | undefined;
@@ -358,16 +402,12 @@ export const createDriver = (config: DriverConfig, deps: {
           schedulerController.markFailed(rcAtStart);
         } finally {
           if (!lifecycleStarted) {
-            // No lifecycle hooks exist yet. Settle only this run, and release
-            // running last so reactive scheduling cannot overlap its cleanup.
-            schedulerController.onTurnSettled();
-            schedulerController.clearAbortController(stepAbortController);
+            // 生命周期尚未启动时，此分支负责直接收尾。finishTurn 会释放
+            // 运行状态，并显式检查等待中的输入。
             if (turn?.scope.activeTurn === turn && turn) turn.scope.activeTurn = null;
-            if (focusMode()) focusMode(false);
-            if (wasOffline && turn
-              && turn.flags.offlineCommandVersionAtStart === offlineCommandVersion)
-              offline(false);
-            running(false);
+            const returnOnline = wasOffline && turn
+              && turn.flags.offlineCommandVersionAtStart === offlineCommandVersion;
+            schedulerController.finishTurn(stepAbortController, Boolean(returnOnline));
           }
         }
       })();
@@ -414,7 +454,7 @@ export const createDriver = (config: DriverConfig, deps: {
     const compact = (manual: boolean): Promise<ManualCompactionResult> => {
       if (manual && !compactionBlocksChatLoop) {
         compactionBlocksChatLoop = true;
-        chatLoopBlocked(true);
+        schedulerController.setChatLoopBlocked(true);
       }
       if (compactionTask) return compactionTask;
 
@@ -517,7 +557,7 @@ export const createDriver = (config: DriverConfig, deps: {
         compactionTask = undefined;
         if (compactionBlocksChatLoop) {
           compactionBlocksChatLoop = false;
-          chatLoopBlocked(false);
+          schedulerController.setChatLoopBlocked(false);
         }
       });
 
@@ -564,9 +604,18 @@ export const createDriver = (config: DriverConfig, deps: {
       compactionMeta,
       chatLoopBlocked,
       focusMode,
-      offlineCommandVersion,
+      get offlineCommandVersion() { return offlineCommandVersion; },
       scheduler,
       activeTurn: null,
+      updateRenderedContext: newRC => {
+        // RC 写入和调度通知位于同一入口，因此每次外部更新都会进入显式调度。
+        rc(newRC);
+        schedulerController.onContextUpdated();
+      },
+      setOfflineMode: value => {
+        offlineCommandVersion++;
+        schedulerController.setOffline(value);
+      },
       extendDebounce: () => schedulerController.extendDebounce(),
       notifyTyping: () => schedulerController.notifyTyping(),
       cleanup,
@@ -577,7 +626,7 @@ export const createDriver = (config: DriverConfig, deps: {
 
   const handleEvent = (chatId: string, newRC: RenderedContext) => {
     if (!chatIds.has(chatId)) return;
-    getOrCreateScope(chatId).rc(newRC);
+    getOrCreateScope(chatId).updateRenderedContext(newRC);
   };
 
   const handleTyping = (chatId: string, userId?: string) => {
@@ -596,8 +645,7 @@ export const createDriver = (config: DriverConfig, deps: {
   const setOfflineMode = (chatId: string, isOffline: boolean) => {
     if (!chatIds.has(chatId)) return;
     const scope = getOrCreateScope(chatId);
-    scope.offlineCommandVersion++;
-    scope.offline(isOffline);
+    scope.setOfflineMode(isOffline);
     log.withFields({ chatId, offline: isOffline }).log('Offline mode changed');
   };
 

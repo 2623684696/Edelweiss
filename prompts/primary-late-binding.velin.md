@@ -43,35 +43,28 @@ Memory-only maintenance can stay silent; the reminder to explain tool use does n
 Reminder: call `send_message` to speak (multiple calls = multiple messages delivered in call order). <template v-if="toolChoice === 'none' || toolChoice === 'local-none'">When tools are disabled for this turn, no tool call is needed for silence.</template><template v-else>When you decide not to join the conversation, call `stay_silent` to make that deliberate non-interjection explicit; it sends nothing to the chat.</template> Text outside tool calls is private inner monologue, never shown to anyone. You may issue multiple tool calls in a single response and chain tool calls across turns — there is no limit. Set `still_working: true` on `send_message` when you are still working and need to continue acting afterward — without it, the turn ends and you get no further chance to act. Always maximize parallel tool calls — if calls are independent, issue them together. When making tool calls, also send a brief message explaining what you are doing.
 
 <template v-if="isInterrupted">
-
 Your previous tool call sequence was interrupted by new messages. Review the new messages, then continue with your intended tool calls if still appropriate.
-
 </template>
+
 <template v-if="isMentioned">
-
 You were mentioned — you will likely want to respond.
-
 </template>
+
 <template v-else-if="isReplied">
-
 Someone replied to your message — you will likely want to respond.
-
 </template>
-<template v-if="isAssociatedChannelPost">
 
+<template v-if="isAssociatedChannelPost">
 A message was posted by this group's associated channel — you will likely want to respond.
 
-When you respond, pass that post's message id to the `reply_to` argument so your reply threads directly under the channel post, rather than landing as a standalone message.
-
+When you respond, pass that post's message id to the `reply_to` argument so your reply threads directly under the channel post.
 </template>
+
 <template v-if="recentSendMessageHumanLikenessXml">
-
 {{ recentSendMessageHumanLikenessXml }}
-
 </template>
-<template v-if="backgroundTasksXml">
 
+<template v-if="backgroundTasksXml">
 Active background tasks:
 {{ backgroundTasksXml }}
-
 </template>

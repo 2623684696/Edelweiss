@@ -47,6 +47,7 @@ export const buildMainSystemPromptParams = (params: {
   hasAskForImageTool: Boolean(params.chatConfig.imageToText.model && params.capabilities.canAskForImage),
   hasMemoryTools: Boolean(params.hasMemoryTools && params.capabilities.canManageMemory),
   hasPokeTool: Boolean(params.hasPokeTool),
+  hasAdvancedImApiTool: params.capabilities.canUseAdvancedImApi,
   availableReactionEmojis: params.reactionEmojis,
   availableSkills: [...params.allSkills.values()]
     .map(s => ({

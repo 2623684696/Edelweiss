@@ -86,11 +86,19 @@ const ChatConfigSchema = v.object({
     markdownHeader: v.optional(v.boolean(), true),
     newline: v.optional(v.boolean(), true),
     notErshi: v.optional(v.boolean(), true),
+    notQueshi: v.optional(v.boolean(), true),
+    notRen: v.optional(v.boolean(), true),
+    notDongpo: v.optional(v.boolean(), true),
+    reducePersonaWords: v.optional(v.record(v.string(), v.number()), {}),
   }), {}),
   skills: v.optional(v.object({
     folder: v.pipe(v.string(), v.nonEmpty()),
   })),
   tools: v.object({
+    /** Expose the raw Telegram Bot API / OneBot 11 API as the `advanced_im_api` tool. */
+    enableAdvancedApi: v.optional(v.boolean(), false),
+    /** Include the `reason` parameter in the `stay_silent` tool schema. */
+    recordStaySilentReason: v.optional(v.boolean(), true),
     bash: v.optional(v.object({
       backgroundThresholdSec: v.optional(v.number(), 10),
       compactOutput: v.optional(v.boolean(), false),
@@ -158,11 +166,17 @@ const ChatOverrideSchema = v.optional(v.partial(v.object({
     markdownHeader: v.boolean(),
     newline: v.boolean(),
     notErshi: v.boolean(),
+    notQueshi: v.boolean(),
+    notRen: v.boolean(),
+    notDongpo: v.boolean(),
+    reducePersonaWords: v.record(v.string(), v.number()),
   })),
   skills: v.object({
     folder: v.string(),
   }),
   tools: v.partial(v.object({
+    enableAdvancedApi: v.boolean(),
+    recordStaySilentReason: v.boolean(),
     bash: v.partial(v.object({
       backgroundThresholdSec: v.number(),
       compactOutput: v.boolean(),
@@ -259,9 +273,15 @@ export interface ResolvedChatConfig {
     markdownHeader: boolean;
     newline: boolean;
     notErshi: boolean;
+    notQueshi: boolean;
+    notRen: boolean;
+    notDongpo: boolean;
+    reducePersonaWords: Record<string, number>;
   };
   skills?: { folder: string };
   tools: {
+    enableAdvancedApi: boolean;
+    recordStaySilentReason: boolean;
     bash: { backgroundThresholdSec: number; compactOutput: boolean };
     webSearch: { tavilyKey: string };
     webFetch?: WebFetchConfig;
@@ -384,6 +404,8 @@ export const resolveChatConfig = (config: Config, chatId: string): ResolvedChatC
     disabledReactions: [...(override.disabledReactions ?? config.chats.default.disabledReactions)],
     humanLikeness: merged.humanLikeness,
     tools: {
+      enableAdvancedApi: merged.tools.enableAdvancedApi,
+      recordStaySilentReason: merged.tools.recordStaySilentReason,
       bash: { backgroundThresholdSec: merged.tools.bash.backgroundThresholdSec, compactOutput: merged.tools.bash.compactOutput },
       webSearch: { tavilyKey: merged.tools.webSearch.tavilyKey },
       webFetch: merged.tools.webFetch

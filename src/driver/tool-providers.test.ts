@@ -28,6 +28,10 @@ const deps = (platform: 'telegram' | 'onebot', sendMessage: CapabilityToolProvid
       markdownHeader: true,
       newline: true,
       notErshi: true,
+      notQueshi: true,
+      notRen: true,
+      notDongpo: true,
+      reducePersonaWords: {},
     },
     imageToText: { enabled: false, compress: false, pixelBudget: 0, maxContextEstTokens: 200_000 },
   } as ResolvedChatConfig,
@@ -102,7 +106,7 @@ describe('createToolsForCapabilities send routing', () => {
   it('offers configured QQ private memory only in matching private chats', () => {
     const toolDeps = deps('onebot', vi.fn());
     toolDeps.chatId = 'private:42';
-    toolDeps.qqPrivateMemory = { groups: ['100'], read: vi.fn() };
+    toolDeps.qqPrivateMemory = { userId: '42', groups: ['100'], read: vi.fn() };
     const capabilities = createDefaultTurnCapabilities('main');
     expect(createToolsForCapabilities(toolDeps, capabilities).map(tool => tool.function.name))
       .toContain('recall_qq_group_memories');
@@ -181,6 +185,41 @@ describe('createToolsForCapabilities send routing', () => {
     const result = await tool.execute(
       { text: '这不是接口问题，而是模型问题' },
       { toolCallId: 'tc-contrast-disabled' },
+    );
+
+    expect(JSON.parse(result.content as string)).toEqual({ ok: true, message_id: '1' });
+    expect(sendMessage).toHaveBeenCalledOnce();
+  });
+
+  it('passes the notQueshi toggle to the send boundary filter', async () => {
+    const sendMessage = vi.fn(async () => ({ messageId: 1, date: 1 }));
+    const toolDeps = deps('telegram', sendMessage);
+    toolDeps.chatConfig.humanLikeness.notQueshi = false;
+    const tool = createToolsForCapabilities(toolDeps, createDefaultTurnCapabilities('main'))
+      .find(candidate => candidate.function.name === 'send_message')!;
+
+    const result = await tool.execute(
+      { text: '确实，这里少传了 abort signal' },
+      { toolCallId: 'tc-queshi-disabled' },
+    );
+
+    expect(JSON.parse(result.content as string)).toEqual({ ok: true, message_id: '1' });
+    expect(sendMessage).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['notRen', '行吧，我认'],
+    ['notDongpo', '仅凭这条还不能断言服务都挂了'],
+  ] as const)('passes the %s toggle to the send boundary filter', async (toggle, text) => {
+    const sendMessage = vi.fn(async () => ({ messageId: 1, date: 1 }));
+    const toolDeps = deps('telegram', sendMessage);
+    toolDeps.chatConfig.humanLikeness[toggle] = false;
+    const tool = createToolsForCapabilities(toolDeps, createDefaultTurnCapabilities('main'))
+      .find(candidate => candidate.function.name === 'send_message')!;
+
+    const result = await tool.execute(
+      { text },
+      { toolCallId: 'tc-ren-disabled' },
     );
 
     expect(JSON.parse(result.content as string)).toEqual({ ok: true, message_id: '1' });

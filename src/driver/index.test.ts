@@ -104,8 +104,14 @@ const chatConfig = (debounce: ResolvedChatConfig['debounce']): ResolvedChatConfi
     markdownHeader: false,
     newline: false,
     notErshi: false,
+    notQueshi: false,
+    notRen: false,
+    notDongpo: false,
+    reducePersonaWords: {},
   },
   tools: {
+    enableAdvancedApi: false,
+    recordStaySilentReason: true,
     bash: {
       backgroundThresholdSec: 30,
       compactOutput: false,

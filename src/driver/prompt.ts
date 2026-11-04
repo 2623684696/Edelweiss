@@ -37,6 +37,7 @@ export interface SystemPromptParams {
   hasPokeTool?: boolean;
   hasAskForImageTool?: boolean;
   hasMemoryTools?: boolean;
+  hasAdvancedImApiTool?: boolean;
   availableReactionEmojis?: string[];
   availableSkills?: AvailableSkillPromptInfo[];
   toolChoice?: ToolChoice;
@@ -56,6 +57,7 @@ export const renderSystemPrompt = async (params: SystemPromptParams) => {
     hasPokeTool: params.hasPokeTool,
     hasAskForImageTool: params.hasAskForImageTool,
     hasMemoryTools: params.hasMemoryTools,
+    hasAdvancedImApiTool: params.hasAdvancedImApiTool,
     availableReactionEmojis: params.availableReactionEmojis,
     availableSkills: params.availableSkills,
     toolChoice: params.toolChoice,

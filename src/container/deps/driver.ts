@@ -1,7 +1,8 @@
-import { getChatIds, resolveChatConfig, resolveModel } from '../../config/config';
-import { createChatMemoryStore, loadCompaction, loadTurnResponses, persistCompaction, persistTurnResponse, readQqGroupMemories } from '../../db';
-import { loadQqPrivateMemoryConfig } from '../../config/config';
+import { getChatIds, loadQqPrivateMemoryConfig, resolveChatConfig, resolveModel } from '../../config/config';
+import { createChatMemoryStore, loadCompaction, loadNextSubagentId, loadTurnResponses, markSubagentMessagesDelivered, persistCompaction, persistSubagent, persistSubagentMessage, persistTurnResponse, readQqGroupMemories } from '../../db';
 import { createDriver } from '../../driver';
+import { createOneBotImApiInvoker } from '../../driver/im-api/onebot';
+import { createTelegramImApiInvoker } from '../../driver/im-api/telegram';
 import type { Registrar } from '../registrar';
 import { TOKENS } from '../tokens';
 
@@ -24,6 +25,10 @@ export default function registerDriver({ get, register }: Registrar): void {
     }, {
       loadTurnResponses: (chatId, afterMs, agentId) => loadTurnResponses(db, chatId, afterMs, agentId),
       persistTurnResponse: (chatId, tr) => persistTurnResponse(db, chatId, tr),
+      persistSubagent: (chatId, record) => persistSubagent(db, { ...record, chatId }),
+      persistSubagentMessage: (chatId, message) => persistSubagentMessage(db, chatId, message),
+      markSubagentMessagesDelivered: (chatId, messageIds) => markSubagentMessagesDelivered(db, chatId, messageIds),
+      loadNextSubagentId: chatId => loadNextSubagentId(db, chatId),
       sendMessage: telegram
         ? (chatId, text, replyToMessageId, attachments) => telegram.driverHooks.sendMessage(chatId, text, replyToMessageId, attachments)
         : async () => { throw new Error('send_message not available: no Telegram configured'); },
@@ -59,6 +64,11 @@ export default function registerDriver({ get, register }: Registrar): void {
       getChatName: chatId => resolveChatConfig(config, chatId).platform === 'onebot'
         ? onebot.handle?.getChatName(chatId) ?? Promise.resolve(chatId)
         : telegram?.manager.getChatName(chatId) ?? Promise.resolve(chatId),
+      getImApiInvoker: chatId => resolveChatConfig(config, chatId).platform === 'onebot'
+        ? createOneBotImApiInvoker(() => onebot.handle?.getApi() ?? null)
+        : telegram
+          ? createTelegramImApiInvoker(() => telegram.manager.bot.raw())
+          : undefined,
       onDebounceStateChange: telegram
         ? (chatId, isDebouncing) => telegram.driverHooks.onDebounceStateChange(chatId, isDebouncing)
         : undefined,
@@ -75,7 +85,7 @@ export default function registerDriver({ get, register }: Registrar): void {
       getChatMemoryStore: (platform, chatId) => createChatMemoryStore(db, platform, chatId),
       getQqPrivateMemory: userId => {
         const rule = qqPrivateMemory[userId];
-        return rule ? { ...rule, read: (groups, keys) => readQqGroupMemories(db, userId, groups, keys) } : undefined;
+        return rule ? { userId, ...rule, read: (groups, keys) => readQqGroupMemories(db, userId, groups, keys) } : undefined;
       },
       backgroundTask: {
         startTask: (typeName, sessionId, params, intention, timeoutMs) =>

@@ -3,8 +3,9 @@ import { resolve } from 'node:path';
 
 import type { Logger } from '@guiiai/logg';
 
+import type { ImApiInvoker } from './im-api/types';
 import type { SkillInfo } from './skills';
-import { createAskForImageTool, createBashTool, createAttachmentDownloader, createDownloadFileTool, createKillTaskTool, createReadImageTool, createReadTaskOutputTool, createSendMessageTool, createSleepTool, createWebFetchTool, createWebSearchTool, createStaySilentTool, createReactMessageTool, createEnterFocusTool, createMemoryTools } from './tools';
+import { createAdvancedImApiTool, createAskForImageTool, createBashTool, createAttachmentDownloader, createDownloadFileTool, createKillTaskTool, createMemoryTools, createReadImageTool, createReadTaskOutputTool, createSendMessageTool, createSleepTool, createWebFetchTool, createWebSearchTool, createStaySilentTool, createReactMessageTool, createEnterFocusTool, withToolResultLimit } from './tools';
 import type { CahciuaTool, SendMessageAttachment, SendMessageTurnFlags } from './tools';
 import { createPokeUserTool } from './tools/poke-user';
 import { createQqPrivateMemoryTool } from './tools/memory';
@@ -36,13 +37,14 @@ export interface CapabilityToolProviderDeps {
   resolveModel: (name: string) => LlmEndpoint;
   imageConversations: ImageConversationManager;
   memory?: ChatMemoryStore;
-  qqPrivateMemory?: { groups: string[]; keys?: string[]; read: (groups: string[], keys?: string[]) => unknown };
+  qqPrivateMemory?: { userId: string; groups: string[]; keys?: string[]; read: (groups: string[], keys?: string[]) => unknown };
   image2?: LlmEndpoint;
   backgroundTask: {
     startTask: (typeName: string, sessionId: string, params: unknown, intention: string | undefined, timeoutMs: number) => number;
     killTask: (taskId: number) => { ok: boolean; error?: string };
     readTaskOutput: (taskId: number, offset?: number, limit?: number) => Promise<{ content: string; totalLines: number; truncated: boolean } | { error: string }>;
   };
+  imApi?: ImApiInvoker;
   focusMode: DriverSignal<boolean>;
   getActiveTurn: () => TurnState | null;
   log: Logger;
@@ -93,11 +95,13 @@ export const createToolsForCapabilities = (
           throw new Error(`OneBot adapter unavailable for chat ${chatId}; refusing Telegram fallback`);
         const sent = await deps.sendMessage(chatId, text, replyTo ? Number(replyTo) : undefined, attachments);
         return { messageId: String(sent.messageId) };
-      }, sendMessageTurnFlags, canOfferReaction, chatConfig.humanLikeness.notErshi));
+      }, sendMessageTurnFlags, canOfferReaction, chatConfig.humanLikeness.notErshi, chatConfig.humanLikeness.notQueshi, chatConfig.humanLikeness.notRen, chatConfig.humanLikeness.notDongpo, {
+        formatMarkdown: chatConfig.platform !== 'onebot',
+      }));
     }
     tools.push(createEnterFocusTool({ focusMode: deps.focusMode, getActiveTurn: deps.getActiveTurn }));
     if (capabilities.canDismissMessage)
-      tools.push(createStaySilentTool());
+      tools.push(createStaySilentTool(chatConfig.tools.recordStaySilentReason));
     return tools;
   };
 
@@ -131,12 +135,12 @@ export const createToolsForCapabilities = (
   const createWebTools = (): CahciuaTool[] => [
     ...(capabilities.canUseWebSearch ? [createWebSearchTool(chatConfig.tools.webSearch.tavilyKey)] : []),
     ...(capabilities.canUseWebFetch && chatConfig.tools.webFetch
-      ? [createWebFetchTool(createWebFetcher(chatConfig.tools.webFetch, {
+      ? [withToolResultLimit(createWebFetchTool(createWebFetcher(chatConfig.tools.webFetch, {
           ...(deps.fetchInstantView ? { instantView: { fetch: deps.fetchInstantView } } : {}),
           onInstantViewError: (error, url) => {
             log.withError(error).withFields({ url }).warn('Instant View fetch failed; falling back to Jina');
           },
-        }))]
+        })))]
       : []),
   ];
 
@@ -210,6 +214,16 @@ export const createToolsForCapabilities = (
         ]
       : [];
 
+  const createAdvancedImApiTools = (): CahciuaTool[] =>
+    capabilities.canUseAdvancedImApi && deps.imApi
+      ? [withToolResultLimit(createAdvancedImApiTool({
+          platform: chatConfig.platform,
+          chatId,
+          invoker: deps.imApi,
+          log,
+        }))]
+      : [];
+
   return [
     ...createChatTools(),
     ...createReactionTools(),
@@ -224,7 +238,8 @@ export const createToolsForCapabilities = (
     ...createAskForImageTools(),
     ...createBackgroundTaskTools(),
     ...(capabilities.canManageMemory && deps.memory ? createMemoryTools(deps.memory) : []),
-    ...(capabilities.canManageMemory && chatConfig.platform === 'onebot' && chatId.startsWith('private:') && deps.qqPrivateMemory
+    ...(capabilities.canManageMemory && chatConfig.platform === 'onebot'
+      && chatId === `private:${deps.qqPrivateMemory?.userId}` && deps.qqPrivateMemory
       ? [createQqPrivateMemoryTool((groups, keys) => {
           const allowed = new Set(deps.qqPrivateMemory!.groups);
           const selected = groups.filter(group => allowed.has(group));
@@ -237,5 +252,6 @@ export const createToolsForCapabilities = (
     ...(capabilities.canSendMessage && chatConfig.tools.image2
       ? [createImage2Tool(deps.image2, downloadAttachment)]
       : []),
+    ...createAdvancedImApiTools(),
   ];
 };

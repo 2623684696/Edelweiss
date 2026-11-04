@@ -3,19 +3,25 @@ import markdownParser from 'prettier/esm/parser-markdown.mjs';
 // @ts-ignore
 import prettier from 'prettier/esm/standalone.mjs';
 
+import { createSendMessageSpeechTicReview } from './send-message-speech-tics';
 import type { CahciuaTool, SendMessageAttachment, SendMessageTurnFlags } from './types';
 import { createTool } from './types';
 
-const RIGID_CONTRAST_RE = /(?:不是[\s\S]{1,20}?(?:而是|(?<![不而])是)|(?<!不)是[\s\S]{1,20}?不是)/u;
+interface SendMessageToolOptions {
+  formatMarkdown?: boolean;
+}
 
 export const createSendMessageTool = (
   send: (text: string, replyTo?: string, attachments?: SendMessageAttachment[]) => Promise<{ messageId: string }>,
   turnFlags?: SendMessageTurnFlags,
   canReact = false,
   rejectRigidContrast = true,
+  rejectQueshi = true,
+  rejectConcession = true,
+  rejectDongpo = true,
+  options?: SendMessageToolOptions,
 ): CahciuaTool => {
-  let queshiFlaggedThisTurn = false;
-  let rigidContrastFlaggedThisTurn = false;
+  const reviewSpeechTics = createSendMessageSpeechTicReview(canReact, rejectRigidContrast, rejectQueshi, rejectConcession, rejectDongpo);
 
   const properties: Record<string, unknown> = {
     text: { type: 'string', description: 'The message to send. When sending attachments, this becomes the caption.' },
@@ -78,54 +84,13 @@ export const createSendMessageTool = (
           };
         }
       }
-      if (!queshiFlaggedThisTurn && text.includes('确实')) {
-        queshiFlaggedThisTurn = true;
-        const agreementOnly = canReact
-          ? {
-              action: 'react_message',
-              ...(reply_to ? { suggested_message_id: reply_to } : {}),
-              instruction: reply_to
-                ? 'React to the replied-to message. Choose an allowed emoji that matches the intended acknowledgement.'
-                : 'Choose the relevant message id from the chat context and an allowed emoji that matches the intended acknowledgement.',
-              fallback: 'stay_silent',
-            }
-          : {
-              action: 'stay_silent',
-              instruction: 'Do not replace the draft with another text-only acknowledgement.',
-            };
-        return {
-          content: JSON.stringify({
-            ok: false,
-            code: 'agreement_review_required',
-            error: 'The draft contains “确实” and needs a semantic review before it can be sent.',
-            next_actions: {
-              has_new_information: {
-                action: 'send_message',
-                instruction: 'Remove only the agreement or acknowledgement wording, then resend while preserving every substantive claim, reason, correction, suggestion, or question from the draft.',
-              },
-              agreement_only: agreementOnly,
-            },
-          }),
-          requiresFollowUp: true,
-        };
-      }
-      if (rejectRigidContrast && !rigidContrastFlaggedThisTurn && RIGID_CONTRAST_RE.test(text)) {
-        rigidContrastFlaggedThisTurn = true;
-        return {
-          content: JSON.stringify({
-            ok: false,
-            code: 'contrast_review_required',
-            error: 'The draft uses a rigid contrast pattern that may contain a meaningless transition and must be regenerated before it can be sent.',
-            next_action: {
-              action: 'send_message',
-              instruction: 'Regenerate the draft without using “不是…而是…”, “是…不是…”, or “不是…是…” as a fixed template. Decide whether the contrast is meaningful: preserve it in a more natural form when useful, or remove the transition when it adds no meaning.',
-            },
-          }),
-          requiresFollowUp: true,
-        };
-      }
-      const formattedText = prettier.format(text, { parser: 'markdown', plugins: [markdownParser], embeddedLanguageFormatting: 'auto' });
-      const result = await send(formattedText, reply_to, attachments);
+      const speechTicRejection = await reviewSpeechTics(text, reply_to, inFocusMode);
+      if (speechTicRejection)
+        return { content: speechTicRejection, requiresFollowUp: true };
+      const outgoingText = options?.formatMarkdown !== false
+        ? prettier.format(text, { parser: 'markdown', plugins: [markdownParser], embeddedLanguageFormatting: 'auto' })
+        : text;
+      const result = await send(outgoingText, reply_to, attachments);
       return {
         content: JSON.stringify({ ok: true, message_id: result.messageId }),
         requiresFollowUp: still_working ?? (turnFlags?.wasLengthLimited ?? false),

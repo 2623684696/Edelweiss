@@ -16,7 +16,7 @@ export type ReadonlySignal<T> = () => T;
 
 export type MainTurnSchedulerController = Pick<
   ReturnType<typeof createDriverScheduler>,
-  'clearAbortController' | 'markFailed' | 'onTurnSettled'
+  'finishTurn' | 'markFailed'
 >;
 
 export interface MainTurnFeatureDeps {

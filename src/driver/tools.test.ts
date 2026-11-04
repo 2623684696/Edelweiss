@@ -458,6 +458,97 @@ describe('createSendMessageTool', () => {
     expect(JSON.parse(result.content as string)).toEqual({ ok: true, message_id: '48' });
   });
 
+  it('allows 确实 when the notQueshi filter is disabled', async () => {
+    const send = vi.fn().mockResolvedValue({ messageId: '51' });
+    const tool = createSendMessageTool(send, undefined, false, true, false);
+
+    const result = await tool.execute(
+      { text: '确实，这里少传了 abort signal' },
+      { toolCallId: 'tc-queshi-disabled' },
+    );
+
+    expect(send).toHaveBeenCalledOnce();
+    expect(JSON.parse(result.content as string)).toEqual({ ok: true, message_id: '51' });
+  });
+
+  it.each(['行吧，我认', '这局我认栽'])('reviews the bare concession tic in %s', async text => {
+    const send = vi.fn();
+    const tool = createSendMessageTool(send);
+
+    const result = await tool.execute({ text }, { toolCallId: 'tc-concession' });
+
+    expect(result.requiresFollowUp).toBe(true);
+    expect(send).not.toHaveBeenCalled();
+    expect(JSON.parse(result.content as string)).toMatchObject({
+      ok: false,
+      code: 'concession_review_required',
+      next_actions: {
+        has_new_information: { action: 'send_message' },
+        concession_only: { action: 'stay_silent' },
+      },
+    });
+  });
+
+  it('prefers a reaction for a pure concession and forwards reply_to as its target', async () => {
+    const send = vi.fn();
+    const tool = createSendMessageTool(send, undefined, true);
+
+    const result = await tool.execute(
+      { text: '行吧，我认', reply_to: '42' },
+      { toolCallId: 'tc-concession-react' },
+    );
+
+    expect(JSON.parse(result.content as string)).toMatchObject({
+      code: 'concession_review_required',
+      next_actions: {
+        concession_only: {
+          action: 'react_message',
+          suggested_message_id: '42',
+          fallback: 'stay_silent',
+        },
+      },
+    });
+  });
+
+  it.each([
+    '我认为这里少传了 abort signal',
+    '我认同这个判断',
+    '我认识这个接口',
+    '我认真看过了',
+  ])('does not treat %s as a concession tic', async text => {
+    const send = vi.fn().mockResolvedValue({ messageId: '52' });
+    const tool = createSendMessageTool(send);
+
+    await tool.execute({ text }, { toolCallId: 'tc-not-concession' });
+
+    expect(send).toHaveBeenCalledOnce();
+  });
+
+  it('allows 我认 when the notRen filter is disabled', async () => {
+    const send = vi.fn().mockResolvedValue({ messageId: '53' });
+    const tool = createSendMessageTool(send, undefined, false, true, true, false);
+
+    const result = await tool.execute(
+      { text: '行吧，我认' },
+      { toolCallId: 'tc-ren-disabled' },
+    );
+
+    expect(send).toHaveBeenCalledOnce();
+    expect(JSON.parse(result.content as string)).toEqual({ ok: true, message_id: '53' });
+  });
+
+  it('can skip Markdown formatting so platform-specific plain text stays literal', async () => {
+    const send = vi.fn().mockResolvedValue({ messageId: '49' });
+    const tool = createSendMessageTool(send, undefined, false, true, true, true, true, { formatMarkdown: false });
+
+    await tool.execute(
+      { text: '_literal_ __also_literal__ user_name' },
+      { toolCallId: 'tc-plain-text' },
+    );
+
+    expect(send).toHaveBeenCalledWith('_literal_ __also_literal__ user_name', undefined, undefined);
+  });
+
   it('allows a regenerated contrast draft after flagging only once per turn', async () => {
     const send = vi.fn().mockResolvedValue({ messageId: '48' });
     const tool = createSendMessageTool(send);
@@ -541,5 +632,16 @@ describe('createSendMessageTool', () => {
     expect(result.requiresFollowUp).toBe(false);
     const payload = JSON.parse(result.content as string);
     expect(payload.ok).toBe(true);
+  });
+
+  it('bypasses speech-tic reviews when inFocusMode is true', async () => {
+    const send = vi.fn().mockResolvedValue({ messageId: '50' });
+    const flags: SendMessageTurnFlags = { wasLengthLimited: false, inFocusMode: true };
+    const tool = createSendMessageTool(send, flags);
+
+    await tool.execute({ text: '确实' }, { toolCallId: 'tc6' });
+    await tool.execute({ text: '这不是接口问题，而是模型问题' }, { toolCallId: 'tc7' });
+
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });

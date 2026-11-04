@@ -76,8 +76,14 @@ const createDeps = (): MainTurnFeatureDeps => ({
       markdownHeader: false,
       newline: false,
       notErshi: false,
+      notQueshi: false,
+      notRen: false,
+      notDongpo: false,
+      reducePersonaWords: {},
     },
     tools: {
+      enableAdvancedApi: false,
+      recordStaySilentReason: true,
       bash: {
         backgroundThresholdSec: 30,
         compactOutput: false,
@@ -115,9 +121,8 @@ const createDeps = (): MainTurnFeatureDeps => ({
     inFocusMode: false,
   })),
   schedulerController: {
-    clearAbortController: vi.fn(),
+    finishTurn: vi.fn(),
     markFailed: vi.fn(),
-    onTurnSettled: vi.fn(),
   },
   getActiveBackgroundTasks: vi.fn(() => []),
   lastTRInterrupted: signal(false),
@@ -140,7 +145,7 @@ describe('createMainTurnFeatures', () => {
     const context = () => createTurnContext({
       abortController: new AbortController(),
       capabilities: createDefaultTurnCapabilities('main'),
-      reactionEmojis: [], trs: [], rcAtStart: [], entries: [], system: '',
+      reactionEmojis: [], trs: [], rcAtStart: [], entries: [], system: '', tools: [],
     } as unknown as TurnState);
     const first = context();
     await feature.preparePrompt!(first);

@@ -12,7 +12,7 @@ Edelweiss is a Telegram / QQ group chat bot built on the **Deterministic Context
 2. **Projection**: `IC' = Reducers(IC, CanonicalIMEvent)` — pure-function state machine producing an Intermediate Context (IC).
 3. **Rendering**: `RC = Render(IC, RenderParams)` — serialization with viewport filtering, producing Rendered Context (RC).
 
-The Driver layer sits after Rendering: it merges RC (chat context) with its own TRs (bot responses, tool results) by timestamp to assemble the final LLM API request. Driver owns tool call loops, reactive scheduling, and context compaction. Supports three API formats: OpenAI Chat Completions (`openai-chat`, via xsai with SSE streaming), OpenAI Responses API (`responses`, via direct fetch with SSE streaming), and Anthropic Messages API (`anthropic-messages`, via direct fetch with SSE streaming). TRs are stored as provider-agnostic `ConversationEntry[]` via the unified API layer; format conversion happens at API boundaries when composing context or sending requests.
+The Driver layer sits after Rendering: it merges RC (chat context) with its own TRs (bot responses, tool results) by timestamp to assemble the final LLM API request. Driver owns tool call loops, explicit per-chat scheduling, and context compaction. Supports three API formats: OpenAI Chat Completions (`openai-chat`, via xsai with SSE streaming), OpenAI Responses API (`responses`, via direct fetch with SSE streaming), and Anthropic Messages API (`anthropic-messages`, via direct fetch with SSE streaming). TRs are stored as provider-agnostic `ConversationEntry[]` via the unified API layer; format conversion happens at API boundaries when composing context or sending requests.
 
 Key design goals: KV Cache friendly (append-only history, static system prompt, epoch-based compaction), group chat native (message batching, multi-user identity tracking, anti-injection via XML fencing), autonomous reply (bot decides whether to respond via Tool Call, not synchronous response).
 
@@ -22,7 +22,7 @@ QQ poke availability is gated by message-send capability, not Telegram-only `can
 
 Main turns in OneBot groups can use `poke_user` (`src/driver/tools/poke-user.ts`) through the current chat's platform adapter and `group_poke` API. The tool runs in the message lane, validates QQ IDs, and is unavailable in Telegram, private chats, subagents, or without adapter support. Incoming pokes do not trigger unconditional auto-pokes; self-originated notices remain ignored.
 
-Synced upstream `rehuactor` through `1960474`: configurable disabled Telegram reactions (default includes 😁), turn setup failure cleanup, and centralized `toolChoice` policies/local retries. Local Liz identity and chat memory prompts are retained; compaction uses `local-none` to preserve the API cache prefix.
+Synced upstream `rehuactor` through `1b5fafa`: configurable send-message draft reviews cover rigid contrast, “确实”, bare “我认” concessions, and a lazy local GPT-style 东坡语法 detector; recent persona-word repetition can also be surfaced through human-likeness feedback. Local Liz identity, natural joke callbacks, chat memory prompts, image2, poke support, and offline-command preservation are retained. Compaction uses `local-none` to preserve the API cache prefix.
 
 Long-image vision inputs now retain up to 768px on the short edge and split into ordered 1536px sections with 128px overlap (maximum 32 sections, explicit failure beyond limits). `src/media/image-tiles.ts` is shared by automatic descriptions and persisted vision conversation replay, including `read_image`. Image-description cache hashes are versioned to avoid reusing previously downscaled descriptions. Ordinary photos honor disabled compression; stickers always compress. Model image limits fail explicitly instead of silently dropping sections.
 
@@ -46,13 +46,13 @@ The optional `models.image2` endpoint overrides only the OpenAI-compatible image
 
 | Layer | Status | Notes |
 |-------|--------|-------|
-| Telegram integration | Done | Bot + userbot, dedup, fileId merge, credential redaction, per-session ingress queue, associated-channel auto-forward detection (`is_automatic_forward` + cached group → linked-channel lookup, prompts active reply), blocking image-to-text (spoiler photos require manual `read_image`), blocking animation-to-text, blocking custom-emoji-to-text, userbot Instant View fetch/photo download with `telegram://instant-view/photo/...` references, send message reactions via bot, receive message reactions via Bot API updates with 500ms add/remove debounce, fetch reaction actors via userbot for count-only updates |
-| OneBot integration | Done | OneBot 11 reverse WebSocket server with graceful shutdown and latest-connection ownership, access-token check, message/notice adaptation, NapCat QQ display names (`get_friend_list` remark → `raw.sendRemarkName` → `raw.sendMemberName` / card → `raw.sendNickName` / nickname), QQ face descriptions, image-to-text hydration, reconnect-safe send/download PlatformAdapter, fail-closed channel routing (never falls back to Telegram), entry-time ingress timestamp capture, per-chat ordered ingress queue (bounded-retry-then-drop, fail-closed), shared (chatId, messageId) dedup across live ingress and cold-start history pull, cold-start alt-text backfill (best-effort), self-sent synthetic event injection on send |
-| Adaptation | Done | Types, conversion, dual timestamps, rich text parsing, string IDs, phantom edit filtering, platform-resolved `isMyself` identity |
-| DB / Persistence | Done | events, messages, turn_responses, turn_responses_v2, compactions, image_alt_texts, image_conversations, image_conversation_turns, subagents, subagent_messages, background_tasks, message_reaction_snapshots, chat_memories tables; 34 migrations |
+| Telegram integration | Done | Bot + userbot, dedup, fileId merge, credential redaction, per-session ingress queue, associated-channel auto-forward detection (`is_automatic_forward` + cached group → linked-channel lookup, prompts active reply), blocking image-to-text (spoiler photos require manual `read_image`), blocking animation-to-text, blocking custom-emoji-to-text, userbot link-preview metadata adaptation from `MessageMediaWebPage`, userbot Instant View fetch/photo download with `telegram://instant-view/photo/...` references, send message reactions via bot, receive message reactions via Bot API updates with 500ms add/remove debounce, fetch reaction actors via userbot for count-only updates |
+| OneBot integration | Done | OneBot 11 reverse WebSocket server with graceful shutdown and latest-connection ownership, access-token check, message/notice adaptation, NapCat QQ display names (`get_friend_list` remark → `raw.sendRemarkName` → `raw.sendMemberName` / card → `raw.sendNickName` / nickname), QQ face descriptions, QQ `com.tencent.structmsg` news-card link-preview adaptation, image-to-text hydration, reconnect-safe send/download PlatformAdapter, fail-closed channel routing (never falls back to Telegram), entry-time ingress timestamp capture, per-chat ordered ingress queue (bounded-retry-then-drop, fail-closed), shared (chatId, messageId) dedup across live ingress and cold-start history pull, cold-start alt-text backfill (best-effort), self-sent synthetic event injection on send |
+| Adaptation | Done | Types, conversion, dual timestamps, rich text parsing, string IDs, phantom edit filtering, platform-resolved `isMyself` identity, Telegram/QQ link-preview content nodes |
+| DB / Persistence | Done | events, messages, turn_responses, turn_responses_v2, compactions, image_alt_texts, image_conversations, image_conversation_turns, subagents (lifecycle written on start/status/finalize), subagent_messages (mailbox enqueue + delivered stamp), background_tasks, message_reaction_snapshots, chat_memories tables; 36 migrations |
 | Projection | Done | Reducer (message/blocked-message/edit/delete/reaction), MetaReducer (user rename detection), Immer-based immutability |
-| Rendering | Done | `render(IC, RenderParams) → RC`, XML serialization, viewport filtering, stable `sender_id` attributes alongside Telegram `@username` and QQ numeric UID sender labels, chronological `image-order`/`file-id` mapping with adjacent `<image-preview>` markers for visual thumbnails, thumbnail content pieces, passive reaction event rendering, blocked-message placeholders as deleted messages, inline `<image>` / `<animation>` / `<sticker>` / `<custom-emoji>` alt text rendering |
-| Driver | Done | Triple-provider SSE streaming (OpenAI Chat Completions via xsai + Responses API via fetch + Anthropic Messages API via fetch), unified API codec layer (provider-agnostic IR with format conversion at boundaries), platform-resolved `chat_name` / `chat_id` system-prompt prefix, lane-based tool execution (`enter_focus` prelude, parallel reads, serialized writers/messages, attachment writer barrier), Instant View-first `web_fetch` with X/Twitter mirror substitution and Jina fallback, shared `telegram://` photo reads via `read_image` / `download_file`, persistent image conversations from automatic alt text and `read_image`, main-agent-only multi-turn `ask_for_image` follow-ups with reset-on-context-overflow, Telegram-only `react_message`, semantic follow-up review for `send_message` drafts containing “确实” (preserve substantive content or react), per-step TR persistence (v2 schema), lightweight turn lifecycle (`TurnContext` + `TurnScratch` + internal `DriverFeature` hooks), mid-turn interruption, reasoning sanitization (per-provider format), reactive orchestration (alien-signals), automatic and `/compact`-triggered context compaction (LLM-based summarization with append-only history), subagent delegation with isolated helper context and mailbox communication, skills system (user-facing tool definitions loaded from markdown files), background tasks (long-running shell tasks with lifecycle management), typing-aware debounce scheduling (debounce-scoped Telegram typing presence with online heartbeat / markAsRead / supergroup channel-difference fallback), offline/online reply gating via /offline /online commands, rtk output compaction (optional argv0 rewriting + pipe fallback for bash tool) |
+| Rendering | Done | `render(IC, RenderParams) → RC`, XML serialization, viewport filtering, stable `sender_id` attributes alongside Telegram `@username` and QQ numeric UID sender labels, chronological `image-order`/`file-id` mapping with adjacent `<image-preview>` markers for visual thumbnails, link previews, thumbnail content pieces, passive reaction event rendering, blocked-message placeholders as deleted messages, inline `<image>` / `<animation>` / `<sticker>` / `<custom-emoji>` alt text rendering |
+| Driver | Done | Triple-provider SSE streaming, unified provider-agnostic API codecs, platform-resolved chat metadata, lane-based tool execution, persistent image conversations, image2, main-agent image follow-ups, reactions and QQ pokes, configurable send-message speech-tic and 东坡语法 draft reviews, chat memories, per-step TR persistence, explicit signal-backed scheduling with mid-turn interruption, automatic/manual compaction, persistent subagent delegation and mailboxes, skills, background tasks, typing-aware debounce, offline/online reply gating, optional `advanced_im_api`, and bounded oversized tool-result files |
 | Eval harness | Initial | Offline LLM eval suites for comparing prompt variants against fixed IC fixtures, repeated runs, custom TypeScript evaluators, side-effect-free tool traces, and probability summaries |
 
 ## Tech Stack
@@ -60,7 +60,7 @@ The optional `models.image2` endpoint overrides only the OpenAI-compatible image
 - **Runtime**: Node.js (>=22), TypeScript, tsx (dev), tsdown (build).
 - **Telegram Bot API**: grammY — primary message handling, sending replies, commands.
 - **Telegram User API**: gramjs (`telegram` on npm) — MTProto client for history fetching, reply-to context resolution, seeing other bots' messages.
-- **OneBot 11**: reverse WebSocket over `ws` — QQ ingress/egress via array message segments, with optional bearer access token. Outbound fenced code blocks can be rendered to images through the optional system `silicon` binary; if unavailable or failing, OneBot send falls back to plain text and logs a warning.
+- **OneBot 11**: reverse WebSocket over `ws` — QQ ingress/egress via array message segments, with optional bearer access token. Outbound text is converted from supported Markdown to QQ plain text while preserving literal underscores. Fenced code blocks can be rendered to images through the optional system `silicon` binary; if unavailable or failing, OneBot send falls back to plain text and logs a warning.
 - **LLM**: Three API format paths — OpenAI Chat Completions (via xsAI `chat()` with `stream: true`), OpenAI Responses API (via direct `fetch` with SSE streaming), and Anthropic Messages API (via direct `fetch` with SSE streaming). A unified API layer (`src/unified-api/`) provides provider-agnostic intermediate representation (`ConversationEntry[]`) with bidirectional codecs: each producer (streaming parser) emits IR, and each consumer (API sender) converts IR back to provider wire format. `composeContext()` builds a `ConversationEntry[]`: user content parts use `InputMessage` with `InputPart[]`, while assistant/tool entries are `OutputMessage` / `ToolResult`. Final conversion happens at the last send boundary via `toChatCompletionsInput()` / `toResponsesInput()` / `toMessagesInput()`. The provider-agnostic transport layer lives in `src/llm/`: SSE streaming helpers `src/llm/streaming.ts` (chat), `src/llm/streaming-responses.ts` (responses), and `src/llm/streaming-messages.ts` (anthropic-messages) parse chunks and emit IR; `src/llm/types.ts` holds `ProviderFormat` / `LlmEndpoint` / `ThinkingConfig` / `Usage`. Per-model `thinking` config is mapped only at API boundaries: chat uses flat `reasoning_effort` when enabled, responses uses `output_config.effort`, and Anthropic Messages uses `thinking.budget_tokens`. The Driver's `call-llm.ts` dispatches through these.
 - **Image processing**: sharp — thumbnails, GIF frame extraction, image resizing.
 - **Animation processing**: ffmpeg-static + ffprobe-static (bundled binaries via npm) — MP4/WEBM frame extraction; lottie-frame (native rlottie + libpng addon) — TGS/Lottie frame rendering. System deps: `libpng-dev`, `librlottie-dev`.
@@ -164,8 +164,12 @@ src/
 │   ├── runner.ts           # LLM step executor: triple-provider SSE streaming + lane-based tool scheduling (prelude/read/write/message/serial)
 │   ├── compaction.ts       # Context compaction: main-turn system/tools prefix reuse, tool_choice: none, compressor role override appended as the final user instruction
 │   ├── compaction.test.ts # Compressor instruction and cached-prefix regression test
-│   ├── scheduler.ts        # Driver scheduler controller: reply eligibility, debounce/typing timers, active-run interruption, begin/settle state
-│   ├── scheduler.test.ts   # Scheduler state-operation tests
+│   ├── dongpo/             # Local GPT-style 东坡语法 detector
+│   │   ├── index.ts        # Character TF-IDF / logistic regression inference, keyword gate, 120-code-point tail, lazy process-wide judge Promise
+│   │   ├── index.test.ts   # Inference properties, gate, threshold, Unicode tail, and single-load tests
+│   │   └── model.json      # Exported dongpo-judge tuned-v1 model; bundled as a lazy JSON chunk
+│   ├── scheduler.ts        # Explicit Driver scheduler: pure scheduling decisions + single-timer/interrupt/start execution
+│   ├── scheduler.test.ts   # Focused scheduling-decision and controller tests
 │   ├── turn-features.ts    # DriverFeature hook interface + fixed prepare-phase runner
 │   ├── turn-phases.ts      # Turn lifecycle phase runner: prepare, shared step loop, finish/fail/cleanup hook dispatch
 │   ├── turn-phases.test.ts # Turn lifecycle phase tests for abort, skip, failure, and cleanup behavior
@@ -178,6 +182,12 @@ src/
 │   ├── prompt.ts           # Prompt rendering — loads all velin templates from prompts/; main prompt starts with sanitized chat_name/chat_id metadata
 │   ├── turn-prefix.ts      # Shared main-turn prompt parameter and capability builders for compaction prefix reuse
 │   ├── skills.ts           # Skill loader: reads markdown files/directories from skills/ folder → SkillInfo map
+│   ├── im-api/             # Raw IM API bridge for the advanced_im_api tool
+│   │   ├── types.ts        # ImApiInvoker / ImApiPlatform / per-platform prompt metadata types
+│   │   ├── descriptions.ts # Per-platform tool descriptions
+│   │   ├── policy.ts       # Method syntax checks, credential-parameter rejection, default chat target, redaction
+│   │   ├── telegram.ts     # Bot API raw invoker (grammY `bot.api.raw`)
+│   │   └── onebot.ts       # OneBot invoker over the existing WS `callAction`
 │   ├── web-fetch/          # Hardcoded host substitution → Telegram Instant View → Jina fallback
 │   │   ├── index.ts        # Composite routing and x.com/twitter.com mirror substitution
 │   │   ├── jina.ts         # Jina Reader fallback backend
@@ -186,8 +196,12 @@ src/
 │   │   ├── types.ts          # CahciuaTool, ToolResult, createTool, SendMessageAttachment, SendMessageTurnFlags
 │   │   ├── bash.ts           # createBashTool + built-in pseudo commands (chat_info, skill_info)
 │   │   ├── send-message.ts   # createSendMessageTool
+│   │   ├── send-message-speech-tics.ts # Async per-turn send-boundary speech-tic reviews (“确实”, concessions, rigid contrasts, and GPT-style 东坡语法)
+│   │   ├── send-message-speech-tics.test.ts # Dongpo send rejection, per-turn reset, disabled/focus bypass, and review ordering tests
+│   │   ├── advanced-im-api.ts # createAdvancedImApiTool (per-platform raw Bot API / OneBot 11 access)
 │   │   ├── web-search.ts     # createWebSearchTool (Tavily)
 │   │   ├── web-fetch.ts      # createWebFetchTool
+│   │   ├── result-limit.ts   # withToolResultLimit: 256-line / 10 KB cap, temp-file offload, redacted preview
 │   │   ├── download-file.ts  # createDownloadFileTool
 │   │   ├── read-image.ts     # createReadImageTool
 │   │   ├── ask-for-image.ts  # Main-agent multi-turn questions against a persisted image conversation
@@ -203,13 +217,13 @@ src/
 │   │   ├── execution.ts      # extractToolCalls, extractLoadedSkillNames, executeToolCall
 │   │   ├── index.ts          # Barrel re-exports
 │   │   └── index.test.ts     # Tool unit tests
-│   ├── send-message-human-likeness.ts # Heuristics for recent send_message human-likeness feedback (6 configurable checks)
+│   ├── send-message-human-likeness.ts # Heuristics for recent send_message human-likeness feedback (6 configurable checks + persona-word thresholds)
 │   ├── send-message-human-likeness.test.ts # Human-likeness heuristic tests
 │   ├── turn-state.ts      # Explicit ChatScope / SchedulerState / TurnState / capability types for driver turn-loop refactors
 │   ├── turn-state.test.ts # Driver turn/scheduler default-state tests
 │   ├── system-prompt.test.ts # System prompt tests
 │   ├── memory-prompt.test.ts # Memory guidance, empty snapshots and XML fencing tests
-│   ├── index.test.ts      # Driver reactive scheduling/debounce tests
+│   ├── index.test.ts      # Driver scheduling/debounce integration tests
 │   ├── tool-providers.ts   # Capability-driven Driver tool assembly providers
 │   ├── tool-providers.test.ts # Tool-provider channel routing tests, including OneBot fail-closed send behavior
 │   ├── subagents/          # Subagent runtime: isolated helper manager, mailbox, lifecycle/types, communication/finalize tools
@@ -501,16 +515,16 @@ Design rule: metadata changes about entities → append-only; content changes to
 
 ### Message Scheduling
 
-Projection runs immediately on every event — IC is always current. Scheduling is owned by the **Driver**. Current strategy: **debounce + natural batching with a cross-interrupt deadline** — when new external messages trigger the reply effect, a debounce timer (`initialDelayMs`, default 5s) starts and the current reply batch gets an absolute deadline (`Date.now() + maxDelayMs`, default 30s). New messages arriving during the wait reset only the debounce timer to `typingExtendMs` (default 5s); they do not move the batch deadline. MTProto typing events (`SendMessageTypingAction`) from non-bot users in the same chat also extend only the debounce timer, capped by the remaining deadline. The `running` flag prevents concurrent LLM calls. Before the batch deadline, new external chat messages arriving during a call abort the in-flight call and reschedule with `typingExtendMs`; once the deadline has passed, ordinary new messages no longer abort the current call, so the bot gets a chance to finish speaking. After a non-interrupted LLM attempt ends, the deadline is cleared; any still-pending external messages form a new batch. Bot responds via `send_message` tool call (not 1:1 response).
+Projection runs immediately on every event — IC is always current. Scheduling is owned by the **Driver**. Current strategy: **debounce + natural batching with a cross-interrupt deadline** — new rendered context explicitly asks the scheduler to evaluate its current snapshot. Ordinary external messages produce a wait decision and one timer scheduled for the earlier of the debounce delay (`initialDelayMs`, default 5s) or the batch's absolute deadline (`Date.now() + maxDelayMs`, default 30s). New messages arriving during the wait reschedule that timer with `typingExtendMs` (default 5s) without moving the deadline. MTProto typing events (`SendMessageTypingAction`) do the same, capped by the remaining deadline. The `running` flag prevents concurrent LLM calls. Before the deadline, new external chat messages arriving during a call produce an interrupt decision and reschedule with `typingExtendMs`; after expiry, ordinary messages no longer abort the current call. A non-interrupted attempt clears the deadline, and any still-pending input forms a new batch. Bot responds via `send_message` tool call (not 1:1 response).
 
-The reply effect reads `rc()` directly (in addition to `needsReply()`) so that it re-runs when RC changes even if `needsReply()` stays `true` — this is required for debounce extension and in-flight interruption checks on new messages. Typing events bypass the signal graph entirely via `extendDebounce()`, which resets only the debounce timer without moving the batch deadline.
+`evaluateScheduling()` is pure: it receives a current snapshot plus a cause and returns `idle`, `wait`, `interrupt`, or `start`. The controller applies that decision. Context, typing, offline-mode, compaction, restored cursor state, turn settlement, timer expiry, and explicit mailbox wake-ups enter through named scheduler methods rather than a signal `effect`. The sole timer never starts a turn directly; on expiry it evaluates current state again, so stale callbacks are harmless without timer-generation tokens.
 
 **Config** (`debounce` section in chat config, per-chat overridable):
 - `initialDelayMs` (number, default `5000`): delay before first LLM call after new external messages.
 - `typingExtendMs` (number, default `5000`): delay reset on new messages or typing events.
 - `maxDelayMs` (number, default `30000`): per-batch hard deadline — forces an LLM call and, after expiry, prevents ordinary new messages from endlessly aborting it.
 
-Scheduling lives in Driver (not a separate orchestration layer) because the Driver already manages the reactive scheduling graph (signal/computed/effect) — externalizing it would create coordination overhead.
+Scheduling lives in Driver (not a separate orchestration layer) because it coordinates Driver-owned turn state, interruption, compaction blocking, and mailbox wake-ups. Signals still hold shared per-chat values, but scheduling transitions are triggered explicitly.
 
 **Offline mode**: Each chat scope has an `offline` signal. When offline, `needsReply` only becomes true if there is an unprocessed RC segment with `mentionsMe` or `repliesToMe` — ordinary new messages are ignored. After the LLM call triggered by a mention/reply completes (success or failure), the Driver automatically resets `offline` to `false` (back to online). Sending `/offline` while an LLM call is already running leaves the call unaffected and keeps offline mode active after it finishes. Commands:
 - `/offline` — enter offline mode; bot responds only to @mentions and replies, then auto-returns online.
@@ -606,15 +620,21 @@ The following optimizations are always active in `composeContext()` (operates on
 - **trimStaleNoToolCallTurnResponses**: Keep only latest 5 TRs without tool calls; older pure-text TRs are dropped before merge.
 - **trimSelfMessagesCoveredBySendToolCalls**: Filter RC segments with `isSelfSent=true` from context assembly (removes duplicate representation — bot messages exist in both RC via userbot and TRs via tool call results).
 - **trimToolResults**: Distance-based mechanical trimming of older oversized tool call results. Oversized means text content `>512 chars` or image content with non-low detail. Only the latest 5 oversized results are kept untrimmed; older oversized results are mechanically trimmed / downgraded.
-- **pruneLengthLimitFailures**: Despite the historical name, removes recoverable `send_message` failures for the 256-byte limit, `agreement_review_required`, and `contrast_review_required` from persisted TRs while retaining them in the live turn for correction. Follow-up `send_message`, `react_message`, or `stay_silent` calls resolve the pending prune.
+- **pruneLengthLimitFailures**: Despite the historical name, removes recoverable `send_message` failures for the 256-byte limit, `agreement_review_required`, `contrast_review_required`, `concession_review_required`, and `dongpo_review_required` from persisted TRs while retaining them in the live turn for correction. Follow-up `send_message`, `react_message`, or `stay_silent` calls resolve the pending prune.
 
-`send_message` intercepts the first draft per turn containing “确实” and returns `agreement_review_required`. This is a request for semantic review, not a declaration that the whole draft is meaningless: the model must remove only acknowledgement wording and preserve substantive content, or use `react_message` when the draft only agrees. The factory receives the already-resolved reaction capability as a boolean; no TurnState, RC, or persistence schema fields are added. If the rejected call supplied `reply_to`, that id is returned as the suggested reaction target; otherwise the model chooses from message ids already present in rendered chat context. OneBot receives the silent fallback and never sees Telegram reaction instructions.
+The send-boundary speech-tic guard in `send-message-speech-tics.ts` intercepts the first draft per turn containing “确实” and returns `agreement_review_required` when `humanLikeness.notQueshi` is enabled (the default). This is a request for semantic review, not a declaration that the whole draft is meaningless: the model must remove only acknowledgement wording and preserve substantive content, or use `react_message` when the draft only agrees. The factory receives the already-resolved reaction capability as a boolean; no TurnState, RC, or persistence schema fields are added. If the rejected call supplied `reply_to`, that id is returned as the suggested reaction target; otherwise the model chooses from message ids already present in rendered chat context. OneBot receives the silent fallback and never sees Telegram reaction instructions.
 
-When `humanLikeness.notErshi` is enabled (the default), the same send boundary intercepts the first draft per turn matching a short “不是…而是…”, “是…不是…”, or “不是…是…” contrast template and returns `contrast_review_required`. The response says the transition may be meaningless rather than assuming all contrasts are invalid: the model must decide whether to preserve the contrast in a more natural form or remove it while regenerating the draft. This toggle controls the send-boundary rejection only; the contrast pattern is not part of recent-message feedback.
+When `humanLikeness.notErshi` is enabled (the default), the same guard intercepts the first draft per turn matching a short “不是…而是…”, “是…不是…”, or “不是…是…” contrast template and returns `contrast_review_required`. The response says the transition may be meaningless rather than assuming all contrasts are invalid: the model must decide whether to preserve the contrast in a more natural form or remove it while regenerating the draft. This toggle controls the send-boundary rejection only; the contrast pattern is not part of recent-message feedback. When the turn is in focus mode (`turnFlags.inFocusMode`), the speech-tic guard is skipped entirely, matching the 256-byte limit bypass.
+
+When `humanLikeness.notRen` is enabled (the default), the same guard intercepts the first draft per turn containing a bare “我认” / “我认了” / “认栽” / “认栽了” concession and returns `concession_review_required` (an Opus 4.6 / DeepSeek 0731 verbal tic). The match requires the phrase to end a clause or sentence and rejects a preceding “不”, so “我认为”, “我认识”, “我认同”, “我认可”, “我认真”, “我认出”, and “我认定” are not flagged. The response treats the draft as a possibly resigned, showdown-style agreement: `has_new_information` asks the model to remove only the concession wording and preserve substantive content, while `concession_only` offers `react_message` (with `reply_to` as the suggested target) or `stay_silent` instead of sending another text-only concession.
 
 ### Human-Likeness Heuristic Toggles
 
-The 6 recent-message heuristic checks in `send-message-human-likeness.ts` can be disabled independently via the `humanLikeness` key in chat config (all enabled by default). Disabling one of those checks removes it from both detection and the late-binding XML feedback. `humanLikeness.notErshi` is a seventh key that controls the separate send-boundary contrast filter.
+When `humanLikeness.notDongpo` is enabled (the default), the async guard runs the local `src/driver/dongpo/` classifier after existing reviews, only for drafts matching `/[不但仅凭只尚却]|无法|更准确/u`. It scores the final 120 Unicode code points once and returns `dongpo_review_required` only when `score > judge.threshold`, with inline rewrite guidance in `send-message-speech-tics.ts` (no Velin template). This targets GPT-style imagined rebuttals and unnecessary disclaimers, preserving substantive content and justified qualifications. Each turn is flagged at most once; disabled/focus-mode checks never load or score the model. A module-level Promise shares one lazy model/judge across chats and concurrent requests. The model is the unchanged `dongpo-judge/artifacts/tuned-v1/model.json`; dynamic JSON import includes it in the tsdown output as a lazy chunk, without runtime dependency on the neighboring repository.
+
+The 6 recent-message heuristic checks in `send-message-human-likeness.ts` can be disabled independently via the `humanLikeness` key in chat config (all enabled by default). Disabling one of those checks removes it from both detection and the late-binding XML feedback. `humanLikeness.notErshi`, `humanLikeness.notQueshi`, `humanLikeness.notRen`, and `humanLikeness.notDongpo` are separate keys that control the four send-boundary filters.
+
+`humanLikeness.reducePersonaWords` is a word → threshold map. The window aggregates total occurrences of each configured word across the recent 5 successful `send_message` drafts; when the total reaches the configured threshold, the XML feedback emits a `persona-word:<word>` feature. Unlike the six message-level checks, this count is not limited to one hit per message.
 
 | Config key | Check | Default |
 |------------|-------|---------|
@@ -625,8 +645,14 @@ The 6 recent-message heuristic checks in `send-message-human-likeness.ts` can be
 | `humanLikeness.markdownHeader` | Markdown header | `true` |
 | `humanLikeness.newline` | Any newline in a send_message | `true` |
 | `humanLikeness.notErshi` | Send-boundary regeneration for rigid “不是…而是…”, “是…不是…”, and “不是…是…” templates | `true` |
+| `humanLikeness.notQueshi` | Send-boundary semantic review for drafts containing “确实” | `true` |
+| `humanLikeness.notRen` | Send-boundary semantic review for bare “我认” / “认栽” concessions (not “认为” / “认识” / “认同”) | `true` |
+| `humanLikeness.notDongpo` | Local-model semantic review for GPT-style 东坡语法 after a keyword gate | `true` |
+| `humanLikeness.reducePersonaWords` | Word → occurrence threshold map; report persona words once the window total is reached | `{}` |
 
-Toggles are per-chat (deep-merged with `default` like all other config). They are defined in `ChatConfigSchema` / `ChatOverrideSchema` in `src/config/config.ts`; the six feedback toggles are passed to `collectRecentSendMessageAssessments()`, while `notErshi` is passed to `createSendMessageTool()`.
+Toggles are per-chat (deep-merged with `default` like all other config). They are defined in `ChatConfigSchema` / `ChatOverrideSchema` in `src/config/config.ts`; the six feedback toggles and `reducePersonaWords` are passed to `collectRecentSendMessageAssessments()`, while `notErshi`, `notQueshi`, and `notRen` are passed to `createSendMessageTool()`.
+
+`tools.recordStaySilentReason` is a separate per-chat switch (default `true`) that includes the `reason` parameter in the `stay_silent` tool schema. It is useful for models whose chain-of-thought is encrypted, since the recorded reason restores some observability; leave it off for models with an open chain-of-thought.
 
 ### Unified API Layer
 
@@ -903,6 +929,6 @@ Co-Authored-By: Model Name <coding agent email>
 
 For Claude Code, each commit message must end with a `Co-Authored-By` trailer. The model name should refer to the runtime environment prompts `You are powered by the model <actual model name>`, and should not be assumed to be `Claude Opus 4.8`.
 
-For Codex, each commit message must also end with a `Co-Authored-By` trailer, using the current Codex model identity. For example: `Co-Authored-By: GPT-5.5 <codex@openai.com>`
+For Codex, each commit message must also end with a `Co-Authored-By` trailer, using the current  end with a `Co-Authored-By` trailer, using the current Codex model identity. For example: `Co-Authored-By: GPT-5.5 <codex@openai.com>`
 
 If this is a port commit, add `Ported from (original repo name) (short commit hash).` after body. For example: `Ported from Cahciua 246d069.` Also. use `--author` to keep original author.

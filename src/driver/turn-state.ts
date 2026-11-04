@@ -26,6 +26,7 @@ export interface TurnCapabilities {
   canAskForImage: boolean;
   canManageMemory: boolean;
   canUseBackgroundTasks: boolean;
+  canUseAdvancedImApi: boolean;
   canLoadSkill: boolean;
   canStartSubagent: boolean;
   canMessageSubagent: boolean;
@@ -47,6 +48,7 @@ export const createDefaultTurnCapabilities = (kind: TurnKind): TurnCapabilities 
   canAskForImage: kind === 'main',
   canManageMemory: kind === 'main',
   canUseBackgroundTasks: true,
+  canUseAdvancedImApi: false,
   canLoadSkill: true,
   canStartSubagent: kind === 'main',
   canMessageSubagent: kind === 'main',
@@ -56,7 +58,6 @@ export const createDefaultTurnCapabilities = (kind: TurnKind): TurnCapabilities 
 
 export interface SchedulerState {
   debounceTimer?: ReturnType<typeof setTimeout>;
-  maxDelayTimer?: ReturnType<typeof setTimeout>;
   debounceWaiting: boolean;
   replyBatchDeadlineMs: number | null;
   startNextDebounceWithExtendDelay: boolean;
@@ -100,6 +101,8 @@ export interface ChatScope {
   offlineCommandVersion: number;
   scheduler: SchedulerState;
   activeTurn: TurnState | null;
+  updateRenderedContext(rc: RenderedContext): void;
+  setOfflineMode(offline: boolean): void;
   extendDebounce(): void;
   notifyTyping(): void;
   cleanup(): void;

@@ -2,6 +2,7 @@ export { createTool, isToolResult } from './types';
 export type { CahciuaTool, CahciuaToolExecuteOptions, SendMessageAttachment, SendMessageTurnFlags, ToolExecutionLane, ToolExecutionPolicy, ToolResult } from './types';
 
 export { createAttachmentDownloader } from './attachment-downloader';
+export { createAdvancedImApiTool } from './advanced-im-api';
 export { createSendMessageTool } from './send-message';
 export { createBashTool, executePseudoCommand } from './bash';
 export type { PseudoCommandContext, PseudoCommandResult } from './bash';
@@ -20,6 +21,8 @@ export { createMemoryTools, createQqPrivateMemoryTool } from './memory';
 export { createImage2Tool } from './image2';
 export { createSleepTool } from './sleep';
 export { createEnterFocusTool } from './focus-mode';
+export { limitToolOutput, TOOL_OUTPUT_MAX_BYTES, TOOL_OUTPUT_MAX_LINES, withToolResultLimit } from './result-limit';
+export type { ToolResultLimitOptions } from './result-limit';
 
 export { executePreparedToolCall, executeToolCall, extractLoadedSkillNames, extractToolCalls, prepareToolCall } from './execution';
 export type { PreparedToolCall, PrepareToolCallResult } from './execution';
