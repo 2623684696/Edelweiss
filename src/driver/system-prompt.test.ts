@@ -83,12 +83,20 @@ describe('primary-system.velin.md', () => {
     expect(rendered).toContain('a callback, playful escalation, or fresh punchline; that is not repetition');
   });
 
-  it('allows user-requested image2 retries after an isolated safety block', async () => {
+  it('does not disclose a conditionally unavailable image2 tool', async () => {
     const rendered = await renderSystem({ modelName: 'gpt-4o' });
-    expect(rendered).toContain('not as proof that the user\'s request is inherently disallowed');
-    expect(rendered).toContain('If the user explicitly asks to retry');
+    expect(rendered).not.toContain('image2');
+  });
+
+  it('allows user-requested image2 retries only in an explicit OneBot image turn', async () => {
+    const rendered = await renderLateBinding({
+      timeNow: '2025-01-01T00:00:00Z',
+      image2Available: true,
+      oneBotImage2Requested: true,
+    });
+    expect(rendered).toContain('not proof that an otherwise allowed request is permanently disallowed');
+    expect(rendered).toContain('Retry only when the user explicitly requests it');
     expect(rendered).toContain('never create an automatic retry loop');
-    expect(rendered).toContain('If the request is clearly prohibited');
   });
 
   it('renders chat metadata after the current channel', async () => {

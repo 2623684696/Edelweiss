@@ -24,5 +24,6 @@ export const createToolFeature = (deps: MainTurnFeatureDeps): DriverFeature => (
     turn.tools = deps.chatConfig.platform === 'onebot' && !ctx.scratch.oneBotImage2Requested
       ? tools.filter(tool => tool.function.name !== 'image2')
       : tools;
+    ctx.scratch.image2Available = turn.tools.some(tool => tool.function.name === 'image2');
   },
 });

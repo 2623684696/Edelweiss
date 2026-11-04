@@ -1,15 +1,22 @@
 ---
 name: maimai-alias
-description: Query maimai DX (舞萌) song nicknames and aliases using LXNS public data. Use for identifying a song from a nickname or listing aliases by song title or ID.
+description: Identify a maimai DX (舞萌) song from a nickname using LXNS public data. Invoke only when the current user message, after trimming whitespace, ends exactly with “是什么歌”; never invoke for other wording, alias listing, IDs, scores, or general maimai questions.
 ---
 
 # 舞萌别名查询
 
-用于回答“这个舞萌外号是哪首歌”“某曲有哪些别名”，支持别名、正式曲名和曲目 ID。不查询玩家成绩，不提交或投票修改别名。
+仅用于回答以“是什么歌”结尾的舞萌曲目识别问题，例如“真爱是什么歌”。支持用别名或正式曲名识别曲目；不查询玩家成绩，不提交或投票修改别名。
+
+## 触发边界
+
+- 先对当前用户消息去除首尾空白；仅当结果以完全一致的中文“是什么歌”结尾时使用本技能。
+- 句末带“？”、“。”或任何其他字符都不满足条件。不得把“哪首歌”“什么曲”“查一下别名”等近义说法自行视为触发词。
+- 条件不满足时不要运行查询脚本，即使上下文涉及舞萌、别名或曲目 ID；按普通对话处理。
+- 查询词是移除句末“是什么歌”后剩余的内容，再去除首尾空白。若查询词为空，询问用户具体想查什么。
 
 ## 执行
 
-1. 从用户请求中提取查询词，保留曲名中的标点；没有查询词时先询问。
+1. 按上述触发边界提取查询词，保留查询词内部的标点。
 2. 通过 `bash` 执行 `skill_info maimai-alias`，获得技能目录的绝对路径 `skillPath`。
 3. 使用 Node.js 22+ 运行目录内的脚本，将查询词作为一个正确 shell 引用的参数传入，不将用户输入拼接为可执行代码：
 

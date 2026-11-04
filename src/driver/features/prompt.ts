@@ -33,6 +33,7 @@ export const createPromptFeature = (deps: MainTurnFeatureDeps): DriverFeature =>
       isMentioned,
       isReplied,
       isAssociatedChannelPost,
+      image2Available: ctx.scratch.image2Available,
       oneBotImage2Requested: ctx.scratch.oneBotImage2Requested,
       recentSendMessageHumanLikenessXml: ctx.scratch.recentSendMessageHumanLikenessXml,
       isInterrupted,
