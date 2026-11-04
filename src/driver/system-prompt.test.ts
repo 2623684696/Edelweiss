@@ -99,6 +99,16 @@ describe('primary-system.velin.md', () => {
     expect(rendered).toContain('never create an automatic retry loop');
   });
 
+  it('explains transient OneBot image2 gating without exposing the tool', async () => {
+    const rendered = await renderLateBinding({
+      timeNow: '2025-01-01T00:00:00Z',
+      image2CommandGated: true,
+    });
+    expect(rendered).toContain('intentionally withheld during ordinary turns');
+    expect(rendered).toContain('never claim that you do not have `/image2`');
+    expect(rendered).not.toContain('Treat the text after `/image2` as a direct image-generation request');
+  });
+
   it('renders chat metadata after the current channel', async () => {
     const rendered = await renderSystem({ chatId: '-100123', chatName: 'Edelweiss Group', modelName: 'gpt-4o' });
     expect(rendered.indexOf('chat_name: Edelweiss Group')).toBeGreaterThan(rendered.indexOf('current-channel: telegram'));

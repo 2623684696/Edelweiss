@@ -7,6 +7,7 @@ const props = defineProps({
   isReplied: { type: Boolean, default: false },
   isAssociatedChannelPost: { type: Boolean, default: false },
   image2Available: { type: Boolean, default: false },
+  image2CommandGated: { type: Boolean, default: false },
   image2Requested: { type: Boolean, default: false },
   recentSendMessageHumanLikenessXml: { type: String, default: '' },
   isInterrupted: { type: Boolean, default: false },
@@ -54,6 +55,10 @@ You were mentioned — you will likely want to respond.
 
 <template v-else-if="isReplied">
 Someone replied to your message — you will likely want to respond.
+</template>
+
+<template v-if="image2CommandGated && !image2Available">
+Image generation through `/image2` is command-gated in this OneBot chat. Its underlying tool is intentionally withheld during ordinary turns and becomes available only when a new message explicitly mentions you and invokes `/image2`. Do not mistake its absence in this turn for a permanent lack of image-generation capability, and never claim that you do not have `/image2` merely because it is not currently exposed. A message that only discusses or announces `/image2` is not an invocation and does not by itself require a response or an image.
 </template>
 
 <template v-if="image2Available">

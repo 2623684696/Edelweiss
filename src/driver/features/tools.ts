@@ -12,6 +12,8 @@ export const createToolFeature = (deps: MainTurnFeatureDeps): DriverFeature => (
       deps.createSendMessageTurnFlags(turn),
     );
     const subagentTools = turn.capabilities.canStartSubagent ? deps.subagentManager.mainTools() : [];
+    ctx.scratch.image2CommandGated = deps.chatConfig.platform === 'onebot'
+      && Boolean(deps.chatConfig.tools.image2);
     ctx.scratch.image2Requested = hasExplicitImage2Request(
       turn.rcAtStart,
       deps.lastProcessedMs(),

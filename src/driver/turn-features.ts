@@ -8,6 +8,7 @@ export interface TurnScratch {
   contextEstimatedTokens: number;
   recentSendMessageHumanLikenessXml: string;
   image2Available: boolean;
+  image2CommandGated: boolean;
   image2Requested: boolean;
 }
 
@@ -21,6 +22,7 @@ export const createTurnScratch = (): TurnScratch => ({
   contextEstimatedTokens: 0,
   recentSendMessageHumanLikenessXml: '',
   image2Available: false,
+  image2CommandGated: false,
   image2Requested: false,
 });
 
