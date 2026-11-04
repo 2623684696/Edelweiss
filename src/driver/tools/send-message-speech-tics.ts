@@ -26,7 +26,8 @@ const buildAcknowledgementOnlyAction = (
     };
 
 /**
- * First offending draft of each kind per turn gets a review prompt.
+ * The lightweight lexical checks prompt once per turn. Dongpo detection reviews
+ * every offending retry so a later draft cannot restore the rejected ending.
  * Returns the rejection payload JSON, or null when the draft may be sent.
  */
 export const createSendMessageSpeechTicReview = (
@@ -39,7 +40,6 @@ export const createSendMessageSpeechTicReview = (
   let agreementFlaggedThisTurn = false;
   let rigidContrastFlaggedThisTurn = false;
   let concessionFlaggedThisTurn = false;
-  let dongpoFlaggedThisTurn = false;
 
   return async (text: string, replyTo: string | undefined, inFocusMode: boolean): Promise<string | null> => {
     if (inFocusMode)
@@ -103,8 +103,7 @@ export const createSendMessageSpeechTicReview = (
       });
     }
 
-    if (rejectDongpo && !dongpoFlaggedThisTurn && await detectDongpo(text)) {
-      dongpoFlaggedThisTurn = true;
+    if (rejectDongpo && await detectDongpo(text)) {
       return JSON.stringify({
         ok: false,
         code: 'defensive_review_required',

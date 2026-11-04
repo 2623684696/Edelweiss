@@ -22,7 +22,7 @@ QQ poke availability is gated by message-send capability, not Telegram-only `can
 
 Main turns in OneBot groups can use `poke_user` (`src/driver/tools/poke-user.ts`) through the current chat's platform adapter and `group_poke` API. The tool runs in the message lane, validates QQ IDs, and is unavailable in Telegram, private chats, subagents, or without adapter support. Incoming pokes do not trigger unconditional auto-pokes; self-originated notices remain ignored.
 
-Synced upstream `rehuactor` through `1b5fafa`: configurable send-message draft reviews cover rigid contrast, “确实”, bare “我认” concessions, and a lazy local GPT-style 东坡语法 detector; recent persona-word repetition can also be surfaced through human-likeness feedback. Local Liz identity, natural joke callbacks, chat memory prompts, image2, poke support, and offline-command preservation are retained. Compaction uses `local-none` to preserve the API cache prefix.
+Synced upstream `rehuactor` through `1b5fafa`: configurable send-message draft reviews cover rigid contrast, “确实”, bare “我认” concessions, and a lazy local GPT-style 东坡语法 detector; Dongpo review is reapplied to every offending same-turn retry so reformulation cannot bypass it. Recent persona-word repetition can also be surfaced through human-likeness feedback. Local Liz identity, natural joke callbacks, chat memory prompts, image2, poke support, and offline-command preservation are retained. Compaction uses `local-none` to preserve the API cache prefix.
 
 Long-image vision inputs now retain up to 768px on the short edge and split into ordered 1536px sections with 128px overlap (maximum 32 sections, explicit failure beyond limits). `src/media/image-tiles.ts` is shared by automatic descriptions and persisted vision conversation replay, including `read_image`. Image-description cache hashes are versioned to avoid reusing previously downscaled descriptions. Ordinary photos honor disabled compression; stickers always compress. Model image limits fail explicitly instead of silently dropping sections.
 
@@ -196,8 +196,8 @@ src/
 │   │   ├── types.ts          # CahciuaTool, ToolResult, createTool, SendMessageAttachment, SendMessageTurnFlags
 │   │   ├── bash.ts           # createBashTool + built-in pseudo commands (chat_info, skill_info)
 │   │   ├── send-message.ts   # createSendMessageTool
-│   │   ├── send-message-speech-tics.ts # Async per-turn send-boundary speech-tic reviews (“确实”, concessions, rigid contrasts, and GPT-style 东坡语法)
-│   │   ├── send-message-speech-tics.test.ts # Dongpo send rejection, per-turn reset, disabled/focus bypass, and review ordering tests
+│   │   ├── send-message-speech-tics.ts # Async send-boundary speech-tic reviews (“确实”, concessions, rigid contrasts, and repeat-safe GPT-style 东坡语法)
+│   │   ├── send-message-speech-tics.test.ts # Dongpo repeated-retry rejection, disabled/focus bypass, and review ordering tests
 │   │   ├── advanced-im-api.ts # createAdvancedImApiTool (per-platform raw Bot API / OneBot 11 access)
 │   │   ├── web-search.ts     # createWebSearchTool (Tavily)
 │   │   ├── web-fetch.ts      # createWebFetchTool
@@ -630,7 +630,7 @@ When `humanLikeness.notRen` is enabled (the default), the same guard intercepts 
 
 ### Human-Likeness Heuristic Toggles
 
-When `humanLikeness.notDongpo` is enabled (the default), the async guard runs the local `src/driver/dongpo/` classifier after existing reviews, only for drafts matching `/[不但仅凭只尚却]|无法|更准确/u`. It scores the final 120 Unicode code points once and returns `dongpo_review_required` only when `score > judge.threshold`, with inline rewrite guidance in `send-message-speech-tics.ts` (no Velin template). This targets GPT-style imagined rebuttals and unnecessary disclaimers, preserving substantive content and justified qualifications. Each turn is flagged at most once; disabled/focus-mode checks never load or score the model. A module-level Promise shares one lazy model/judge across chats and concurrent requests. The model is the unchanged `dongpo-judge/artifacts/tuned-v1/model.json`; dynamic JSON import includes it in the tsdown output as a lazy chunk, without runtime dependency on the neighboring repository.
+When `humanLikeness.notDongpo` is enabled (the default), the async guard runs the local `src/driver/dongpo/` classifier after existing reviews, only for drafts matching `/[不但仅凭只尚却]|无法|更准确/u`. It scores the final 120 Unicode code points once and returns `defensive_review_required` only when `score > judge.threshold`, with inline rewrite guidance in `send-message-speech-tics.ts` (no Velin template). This targets GPT-style imagined rebuttals and unnecessary disclaimers, preserving substantive content and justified qualifications. Every offending retry in the same turn is reviewed again, preventing a later reformulation from restoring rejected defensive wording; disabled/focus-mode checks never load or score the model. A module-level Promise shares one lazy model/judge across chats and concurrent requests. The model is the unchanged `dongpo-judge/artifacts/tuned-v1/model.json`; dynamic JSON import includes it in the tsdown output as a lazy chunk, without runtime dependency on the neighboring repository.
 
 The 6 recent-message heuristic checks in `send-message-human-likeness.ts` can be disabled independently via the `humanLikeness` key in chat config (all enabled by default). Disabling one of those checks removes it from both detection and the late-binding XML feedback. `humanLikeness.notErshi`, `humanLikeness.notQueshi`, `humanLikeness.notRen`, and `humanLikeness.notDongpo` are separate keys that control the four send-boundary filters.
 

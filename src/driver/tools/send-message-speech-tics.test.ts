@@ -9,7 +9,7 @@ vi.mock('../dongpo', () => ({ detectDongpo: vi.fn() }));
 beforeEach(() => vi.mocked(detectDongpo).mockReset().mockResolvedValue(false));
 
 describe('dongpo speech-tic review', () => {
-  it('requests a rewrite before sending and flags only once per turn', async () => {
+  it('requests a rewrite for every offending retry in a turn', async () => {
     vi.mocked(detectDongpo).mockResolvedValue(true);
     const send = vi.fn().mockResolvedValue({ messageId: '42' });
     const tool = createSendMessageTool(send);
@@ -27,18 +27,18 @@ describe('dongpo speech-tic review', () => {
     expect(payload.next_actions.has_new_information.instruction).toContain('防御性表达');
     expect(payload.next_actions.has_new_information.instruction).toContain('保留你认为有效的信息量');
 
-    const sent = await tool.execute(draft, { toolCallId: 'retry' });
-    expect(JSON.parse(sent.content as string)).toEqual({ ok: true, message_id: '42' });
-    expect(send).toHaveBeenCalledOnce();
-    expect(detectDongpo).toHaveBeenCalledOnce();
+    const retried = await tool.execute(draft, { toolCallId: 'retry' });
+    expect(JSON.parse(retried.content as string).code).toBe('defensive_review_required');
+    expect(send).not.toHaveBeenCalled();
+    expect(detectDongpo).toHaveBeenCalledTimes(2);
 
     const nextTurn = createSendMessageTool(send);
     const nextRejected = await nextTurn.execute(draft, { toolCallId: 'next-turn' });
     expect(JSON.parse(nextRejected.content as string).code).toBe('defensive_review_required');
-    expect(detectDongpo).toHaveBeenCalledTimes(2);
+    expect(detectDongpo).toHaveBeenCalledTimes(3);
   });
 
-  it('does not consume the per-turn review when a draft passes', async () => {
+  it('reviews a later offending draft after a clean send', async () => {
     const send = vi.fn().mockResolvedValue({ messageId: '42' });
     const tool = createSendMessageTool(send);
     await tool.execute({ text: '服务已经恢复了' }, { toolCallId: 'normal' });
