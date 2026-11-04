@@ -9,7 +9,7 @@ vi.mock('../dongpo', () => ({ detectDongpo: vi.fn() }));
 beforeEach(() => vi.mocked(detectDongpo).mockReset().mockResolvedValue(false));
 
 describe('dongpo speech-tic review', () => {
-  it('requests a rewrite for every offending retry in a turn', async () => {
+  it('requests a rewrite before sending and flags only once per turn', async () => {
     vi.mocked(detectDongpo).mockResolvedValue(true);
     const send = vi.fn().mockResolvedValue({ messageId: '42' });
     const tool = createSendMessageTool(send);
@@ -21,30 +21,30 @@ describe('dongpo speech-tic review', () => {
     const payload = JSON.parse(rejected.content as string);
     expect(payload).toMatchObject({
       ok: false,
-      code: 'defensive_review_required',
-      next_actions: { has_new_information: { action: 'send_message' } },
+      code: 'dongpo_review_required',
+      next_action: { action: 'send_message' },
     });
-    expect(payload.next_actions.has_new_information.instruction).toContain('防御性表达');
-    expect(payload.next_actions.has_new_information.instruction).toContain('保留你认为有效的信息量');
+    expect(payload.next_action.instruction).toContain('GPT');
+    expect(payload.next_action.instruction).toContain('保留实质事实');
 
-    const retried = await tool.execute(draft, { toolCallId: 'retry' });
-    expect(JSON.parse(retried.content as string).code).toBe('defensive_review_required');
-    expect(send).not.toHaveBeenCalled();
-    expect(detectDongpo).toHaveBeenCalledTimes(2);
+    const sent = await tool.execute(draft, { toolCallId: 'retry' });
+    expect(JSON.parse(sent.content as string)).toEqual({ ok: true, message_id: '42' });
+    expect(send).toHaveBeenCalledOnce();
+    expect(detectDongpo).toHaveBeenCalledOnce();
 
     const nextTurn = createSendMessageTool(send);
     const nextRejected = await nextTurn.execute(draft, { toolCallId: 'next-turn' });
-    expect(JSON.parse(nextRejected.content as string).code).toBe('defensive_review_required');
-    expect(detectDongpo).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(nextRejected.content as string).code).toBe('dongpo_review_required');
+    expect(detectDongpo).toHaveBeenCalledTimes(2);
   });
 
-  it('reviews a later offending draft after a clean send', async () => {
+  it('does not consume the per-turn review when a draft passes', async () => {
     const send = vi.fn().mockResolvedValue({ messageId: '42' });
     const tool = createSendMessageTool(send);
     await tool.execute({ text: '服务已经恢复了' }, { toolCallId: 'normal' });
     vi.mocked(detectDongpo).mockResolvedValue(true);
     const rejected = await tool.execute({ text: '但这不能说明一切' }, { toolCallId: 'review' });
-    expect(JSON.parse(rejected.content as string).code).toBe('defensive_review_required');
+    expect(JSON.parse(rejected.content as string).code).toBe('dongpo_review_required');
     expect(send).toHaveBeenCalledOnce();
   });
 
@@ -66,7 +66,7 @@ describe('dongpo speech-tic review', () => {
     expect(detectDongpo).not.toHaveBeenCalled();
     flags.inFocusMode = false;
     const rejected = await tool.execute({ text: '但这不能说明一切' }, { toolCallId: 'normal' });
-    expect(JSON.parse(rejected.content as string).code).toBe('defensive_review_required');
+    expect(JSON.parse(rejected.content as string).code).toBe('dongpo_review_required');
     expect(send).toHaveBeenCalledOnce();
   });
 
