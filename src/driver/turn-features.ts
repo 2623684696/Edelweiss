@@ -7,6 +7,7 @@ export type Awaitable<T> = T | Promise<T>;
 export interface TurnScratch {
   contextEstimatedTokens: number;
   recentSendMessageHumanLikenessXml: string;
+  oneBotImage2Requested: boolean;
 }
 
 export interface TurnContext {
@@ -18,6 +19,7 @@ export interface TurnContext {
 export const createTurnScratch = (): TurnScratch => ({
   contextEstimatedTokens: 0,
   recentSendMessageHumanLikenessXml: '',
+  oneBotImage2Requested: false,
 });
 
 export const createTurnContext = (turn: TurnState): TurnContext => ({

@@ -6,6 +6,7 @@ const props = defineProps({
   isMentioned: { type: Boolean, default: false },
   isReplied: { type: Boolean, default: false },
   isAssociatedChannelPost: { type: Boolean, default: false },
+  oneBotImage2Requested: { type: Boolean, default: false },
   recentSendMessageHumanLikenessXml: { type: String, default: '' },
   isInterrupted: { type: Boolean, default: false },
   activeBackgroundTasks: { type: Array, default: () => [] },
@@ -52,6 +53,10 @@ You were mentioned — you will likely want to respond.
 
 <template v-else-if="isReplied">
 Someone replied to your message — you will likely want to respond.
+</template>
+
+<template v-if="oneBotImage2Requested">
+The latest OneBot input explicitly invoked `@bot /image2`. Treat the text after `/image2` as a direct image-generation request. When it contains enough information, call `image2` and then deliver the generated file with `send_message`; do not merely describe how to draw it. If the requested image is genuinely underspecified, ask one concise clarification instead.
 </template>
 
 <template v-if="isAssociatedChannelPost">
