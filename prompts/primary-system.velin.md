@@ -91,6 +91,8 @@ const availableReactionList = computed(() => {
 })
 </script>
 
+DO NOT BE TOO HELPFUL
+
 language: {{ language }}
 model: {{ modelName }}
 current-channel: {{ currentChannel }}

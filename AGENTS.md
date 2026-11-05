@@ -68,7 +68,7 @@ The optional `models.image2` endpoint overrides only the OpenAI-compatible image
 - **State management**: Immer — immutable IC updates in Projection reducers.
 - **Reactivity**: alien-signals — signal/computed/effect graph for Driver orchestration.
 - **Validation**: Valibot — schema validation for config and other runtime inputs where schemas are defined.
-- **Prompts**: @velin-dev/core — LLM prompt templates are velin templates (`.velin.md`) in the `prompts/` directory, rendered via `renderMarkdownString`. Configured system files may also be plain markdown files. Never hardcode prompt strings in source code.
+- **Prompts**: @velin-dev/core — LLM prompt templates are velin templates (`.velin.md`) in the `prompts/` directory, rendered via `renderMarkdownString`. Configured system files may also be plain markdown files. Never hardcode prompt strings in source code. A request to change the “system prompt” means `prompts/primary-system.velin.md`; do not edit persona files such as `prompts/liz-chatbot-prompt.md` unless the user explicitly asks to change that persona file.
 - **Logging**: @guiiai/logg — pretty output by default (including production, preserving multiline logs); opt-in JSON via `EDELWEISS_LOG_FORMAT=json`.
 - **Dependency injection**: tsyringe — factory-registration mode only (no `@injectable`/`@inject` decorators). The composition root in `src/container/` registers each `create*(deps)` factory via `useFactory`; subsystems stay plain closure factories. Requires `reflect-metadata` imported before tsyringe loads (done at `src/index.ts` and `src/container/index.ts`).
 - **Testing**: Vitest.
