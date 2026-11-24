@@ -229,7 +229,7 @@ export const adaptPokeCommand = (
       const match = /^\/poke(?:@([a-z0-9_]+))?$/i.exec(text);
       if (!match || ++commands > 1) return null;
       if (match[1]) {
-        if (!botUsername || match[1].toLowerCase() !== botUsername.toLowerCase()) return null;
+        if (match[1].toLowerCase() !== botUsername?.toLowerCase()) return null;
         mentioned = true;
       }
     } else if (entity.type === 'mention' && botUsername

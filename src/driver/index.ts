@@ -406,8 +406,7 @@ export const createDriver = (config: DriverConfig, deps: {
             // 生命周期尚未启动时，此分支负责直接收尾。finishTurn 会释放
             // 运行状态，并显式检查等待中的输入。
             if (turn?.scope.activeTurn === turn && turn) turn.scope.activeTurn = null;
-            const returnOnline = wasOffline && turn
-              && turn.flags.offlineCommandVersionAtStart === offlineCommandVersion;
+            const returnOnline = wasOffline && turn?.flags.offlineCommandVersionAtStart === offlineCommandVersion;
             schedulerController.finishTurn(stepAbortController, Boolean(returnOnline));
           }
         }

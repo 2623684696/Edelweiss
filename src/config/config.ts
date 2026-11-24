@@ -345,7 +345,7 @@ export const resolveBackgroundTasks = (config: Config): BackgroundTasksConfig =>
 
 export const resolveModel = (config: Config, name: string): LlmEndpoint => {
   const entry = config.models[name];
-  if (!entry || !entry.model) throw new Error(`Unknown or incomplete model "${name}" — expected a model name`);
+  if (!entry?.model) throw new Error(`Unknown or incomplete model "${name}" — expected a model name`);
   return entry as LlmEndpoint;
 };
 

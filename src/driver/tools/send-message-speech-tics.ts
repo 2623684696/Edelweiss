@@ -12,7 +12,7 @@ const buildAcknowledgementOnlyAction = (
   replyTo: string | undefined,
   silentInstruction: string,
 ) => canReact
-    ? {
+  ? {
       action: 'react_message',
       ...(replyTo ? { suggested_message_id: replyTo } : {}),
       instruction: replyTo
@@ -20,7 +20,7 @@ const buildAcknowledgementOnlyAction = (
         : 'Choose the relevant message id from the chat context and an allowed emoji that matches the intended acknowledgement.',
       fallback: 'stay_silent',
     }
-    : {
+  : {
       action: 'stay_silent',
       instruction: silentInstruction,
     };
