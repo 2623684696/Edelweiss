@@ -290,6 +290,33 @@ describe('adaptOneBotMessage', () => {
     }]);
   });
 
+  it('keeps NapCat [图片] summaries as ordinary photos', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const api = { getFriendRemark: vi.fn(async () => undefined) } as unknown as OneBotApiClient;
+    const event: OneBotMessageEvent = {
+      post_type: 'message',
+      message_type: 'group',
+      time: 1,
+      self_id: 999,
+      user_id: 42,
+      group_id: 100,
+      message_id: 7,
+      message: [{ type: 'image', data: { file: 'original.jpg', url: 'http://example.invalid/original.jpg', summary: '[图片]' } }],
+      raw_message: '[图片]',
+      sender: { user_id: 42, nickname: 'sender' },
+    };
+
+    const adapted = await adaptOneBotMessage(api, event, { receivedAtMs: 1000, utcOffsetMin: 480 });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(adapted.attachments).toEqual([{
+      type: 'photo',
+      fileName: 'original.jpg',
+      fileRef: 'original.jpg',
+    }]);
+  });
+
   it('keeps live sticker classification fail-closed', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed'); }));
     const api = { getFriendRemark: vi.fn(async () => undefined) } as unknown as OneBotApiClient;

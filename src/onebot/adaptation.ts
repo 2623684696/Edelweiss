@@ -100,7 +100,12 @@ const extractFileName = (file: string): string | undefined => {
   return name || undefined;
 };
 
-const STICKER_REGEX = /^\[.*\]$/;
+// NapCat uses bracketed summaries for several media kinds. In particular,
+// ordinary images commonly arrive as "[图片]", so treating every bracketed
+// summary as a sticker misclassifies normal photos. Emoji metadata is the
+// strongest signal; the summary fallback is intentionally limited to the two
+// known generic sticker labels.
+const STICKER_SUMMARIES = new Set(['[表情]', '[动画表情]']);
 
 const adaptSegment = async (
   api: OneBotApiClient,
@@ -134,7 +139,9 @@ const adaptSegment = async (
 
   case 'image': {
     let attType: CanonicalAttachment['type'] = 'photo';
-    const isStickerOrAnimation = seg.data.emoji_id != null || seg.data.emoji_pack_id != null || STICKER_REGEX.test(seg.data.summary ?? '');
+    const isStickerOrAnimation = seg.data.emoji_id != null
+      || seg.data.emoji_pack_id != null
+      || STICKER_SUMMARIES.has(seg.data.summary?.trim() ?? '');
     if (isStickerOrAnimation) {
       attType = 'sticker';
       try {

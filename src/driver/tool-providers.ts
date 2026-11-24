@@ -7,9 +7,9 @@ import type { ImApiInvoker } from './im-api/types';
 import type { SkillInfo } from './skills';
 import { createAdvancedImApiTool, createAskForImageTool, createBashTool, createAttachmentDownloader, createDownloadFileTool, createKillTaskTool, createMemoryTools, createReadImageTool, createReadTaskOutputTool, createSendMessageTool, createSleepTool, createWebFetchTool, createWebSearchTool, createStaySilentTool, createReactMessageTool, createEnterFocusTool, withToolResultLimit } from './tools';
 import type { CahciuaTool, SendMessageAttachment, SendMessageTurnFlags } from './tools';
-import { createPokeUserTool } from './tools/poke-user';
-import { createQqPrivateMemoryTool } from './tools/memory';
 import { createImage2Tool } from './tools/image2';
+import { createQqPrivateMemoryTool } from './tools/memory';
+import { createPokeUserTool } from './tools/poke-user';
 import type { DriverSignal, TurnCapabilities, TurnState } from './turn-state';
 import type { PlatformAdapter } from './types';
 import { createWebFetcher } from './web-fetch';
@@ -97,6 +97,7 @@ export const createToolsForCapabilities = (
         return { messageId: String(sent.messageId) };
       }, sendMessageTurnFlags, canOfferReaction, chatConfig.humanLikeness.notErshi, chatConfig.humanLikeness.notQueshi, chatConfig.humanLikeness.notRen, chatConfig.humanLikeness.notDongpo, {
         formatMarkdown: chatConfig.platform !== 'onebot',
+        platform: chatConfig.platform,
       }));
     }
     tools.push(createEnterFocusTool({ focusMode: deps.focusMode, getActiveTurn: deps.getActiveTurn }));

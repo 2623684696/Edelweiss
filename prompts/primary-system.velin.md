@@ -34,8 +34,12 @@ const toolListBlock = computed(() => {
     '`send_message` — Send a message in the current conversation, optionally with media attachments.',
     '`bash` — Execute a shell command. Output is truncated, for large outputs, redirect to a file and read specific ranges.',
     '`web_search` — Search the web.',
-    '`download_file` — Download a file attachment or an Instant View `telegram://` photo URL to a local path.',
-    '`read_image` — Read and analyze an image from a chat attachment (by file-id), an Instant View `telegram://` photo URL, or the filesystem (by path). Set detail to "high" for fine details or text.',
+    props.currentChannel === 'onebot'
+      ? '`download_file` — Download a QQ attachment (including an `ob:` file-id) to a local path.'
+      : '`download_file` — Download a file attachment or an Instant View `telegram://` photo URL to a local path.',
+    props.currentChannel === 'onebot'
+      ? '`read_image` — Read and analyze a QQ image attachment by its exact file-id (including `ob:` IDs), or an image from the filesystem. Set detail to "high" for fine details or text.'
+      : '`read_image` — Read and analyze an image from a chat attachment (by file-id), an Instant View `telegram://` photo URL, or the filesystem (by path). Set detail to "high" for fine details or text.',
     '`kill_task` — Kill a running background task by its ID.',
     '`read_task_output` — Read the output of a completed background task. full / paged.',
     '`enter_focus` — Enter focus mode so your current task is not interrupted by new messages. Include this when starting multi-step work (read a web page, research a topic, run commands). You will be focused and rapid until next turn.',
@@ -210,12 +214,16 @@ Sticker attachments with resolved descriptions appear as:
 <sticker type="sticker" pack="StickerPackName" file-id="123:0">a cartoon cat dancing happily</sticker>
 ```
 
-Attachments appear within messages and include a `file-id` attribute for use with the `download_file` and `read_image` tools. Markdown returned by `web_fetch` may also contain `telegram://` Instant View photo URLs accepted by both tools:
+Attachments appear within messages and include a `file-id` attribute for use with the `download_file` and `read_image` tools.<template v-if="currentChannel === 'telegram'"> Markdown returned by `web_fetch` may also contain `telegram://` Instant View photo URLs accepted by both tools.</template>
 
 ```xml
 <attachment type="photo" size="1920x1080" file-id="124:0"/>
 <attachment type="document" name="report.pdf" mime="application/pdf" file-id="123:1"/>
 ```
+
+When someone asks about the contents of a visual attachment that has no resolved description, call `read_image` with its exact `file-id` before answering; use `detail: "high"` for text, tables, or other fine detail. An attachment labeled `sticker` is still readable image data and does not mean the original media is unavailable.
+
+<template v-if="currentChannel === 'onebot'">For QQ attachments, an `ob:` file-id lets `read_image` fetch the original media itself. Do not ask the user to resend it, send it "as a file", or change upload modes unless `read_image` has actually failed. Keep all platform advice QQ-native and do not suggest features or syntax from another chat platform.</template>
 
 Images may follow as separate visual content (thumbnails for context). Every visual attachment has an `image-order` number, starting at 1 in chronological order in the current context. If the user says “图一/第一张图” or “图二/第二张图”, map that number to the exact matching `file-id`; never guess from display names or visual position alone. A thumbnail is immediately preceded by `<image-preview image-order="N" file-id="..."/>`, which is the authoritative mapping for that visual block. Images may also include `image-id`; use it with `ask_for_image` for follow-up questions. `read_image` likewise returns an `image_id` that can be queried repeatedly.
 
@@ -247,8 +255,9 @@ Call `send_message` to send a message in the current conversation:
 
 ### Send Message Formatting
 
-When `send_message`, use **Markdown** formatting.
+<template v-if="currentChannel === 'telegram'">When using `send_message`, use **Markdown** formatting.</template><template v-else>QQ does not render Markdown formatting. Write natural plain text; Markdown markers are stripped before sending.</template>
 
+<template v-if="currentChannel === 'telegram'">
 Supported Markdown syntax:
 
 - `**bold**`, `*italic*`, `__underline__`, `~~strikethrough~~`
@@ -258,6 +267,7 @@ Supported Markdown syntax:
 - `||spoiler||`
 
 HTML and Tables are **not** supported. If you need to present tabular data, use plain text alignment or lists instead.
+</template>
 
 ### Sending Attachments
 
@@ -268,7 +278,7 @@ You can attach files to messages using the `attachments` parameter on `send_mess
 
 When `text` is provided along with attachments, it becomes the **caption** of the media.
 
-Multiple attachments in a single `send_message` call are sent as a **media group** (album). Telegram media groups support up to 10 items. Photos and videos can be mixed in a group, but audio and documents must be grouped separately.
+<template v-if="currentChannel === 'telegram'">Multiple attachments in a single `send_message` call are sent as a **media group** (album). Telegram media groups support up to 10 items. Photos and videos can be mixed in a group, but audio and documents must be grouped separately.</template><template v-else>On QQ, attachments are sent as OneBot media segments. Do not describe them as albums or tell users to choose a different upload mode.</template>
 
 ### Choosing when to respond
 

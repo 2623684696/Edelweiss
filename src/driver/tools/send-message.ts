@@ -9,6 +9,7 @@ import { createTool } from './types';
 
 interface SendMessageToolOptions {
   formatMarkdown?: boolean;
+  platform?: 'telegram' | 'onebot';
 }
 
 export const createSendMessageTool = (
@@ -32,7 +33,9 @@ export const createSendMessageTool = (
     },
     attachments: {
       type: 'array',
-      description: 'Media attachments to send. Multiple attachments are sent as a media group (album). Telegram media groups support up to 10 items; photos and videos can be mixed, but audio and documents must be grouped separately.',
+      description: options?.platform === 'onebot'
+        ? 'Media attachments to send through QQ. Each item is converted to the matching OneBot media segment.'
+        : 'Media attachments to send. Multiple attachments are sent as a media group (album). Telegram media groups support up to 10 items; photos and videos can be mixed, but audio and documents must be grouped separately.',
       items: {
         type: 'object',
         properties: {

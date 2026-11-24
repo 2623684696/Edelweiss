@@ -186,6 +186,10 @@ describe('primary-system.velin.md', () => {
     expect(rendered).not.toContain('Allowed reaction emoji');
     expect(rendered).not.toContain('Telegram reaction');
     expect(rendered).not.toContain('reaction_added');
+    expect(rendered).not.toContain('telegram://');
+    expect(rendered).toContain('an `ob:` file-id lets `read_image` fetch the original media itself');
+    expect(rendered).toContain('Do not ask the user to resend it');
+    expect(rendered).toContain('QQ does not render Markdown formatting');
     expect(rendered).toContain('uncertainty alone is not a reason to suppress a relevant, natural response');
     assertNoVueSyntaxLeak(rendered);
   });

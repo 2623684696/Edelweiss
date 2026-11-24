@@ -33,13 +33,13 @@ export const createReadImageTool = (deps: {
     lane: 'readonly',
     waitForWriters: input => Boolean((input as { path?: string }).path),
   },
-  description: 'Read and analyze an image from a chat attachment, an Instant View telegram:// photo URL, or the filesystem.',
+  description: 'Read and analyze an image from a chat attachment (including QQ ob: file IDs), an Instant View telegram:// photo URL, or the filesystem.',
   parameters: {
     type: 'object',
     properties: {
       file_id: {
         type: 'string',
-        description: 'A file-id from an attachment element (messageId:index) or a telegram:// Instant View photo URL.',
+        description: 'A file-id copied exactly from an attachment element (including QQ ob: IDs or Telegram messageId:index IDs), or a telegram:// Instant View photo URL.',
       },
       path: {
         type: 'string',
