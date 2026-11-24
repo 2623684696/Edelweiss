@@ -127,6 +127,7 @@ export const createBotClient = (options: BotClientOptions, logger: Logger): BotC
     // Report all commands to Telegram so they appear in the UI command menu.
     const allCommands = [
       { command: 'start', description: 'Check bot status' },
+      { command: 'poke', description: 'Poke the bot (explicit @mention required)' },
       ...pendingCommands.map(c => ({ command: c.name, description: c.description })),
     ];
     await bot.api.setMyCommands(allCommands);

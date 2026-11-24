@@ -1,6 +1,6 @@
 import type { Logger } from '@guiiai/logg';
 
-import { adaptDelete, adaptEdit, adaptMessage, adaptReaction, adaptServiceEvent, contentToPlainText, isServiceMessage } from './adaption';
+import { adaptDelete, adaptEdit, adaptMessage, adaptPokeCommand, adaptReaction, adaptServiceEvent, contentToPlainText, isServiceMessage } from './adaption';
 import type { TelegramEventSink } from './event-sink';
 import type { TelegramManager } from './manager';
 import type { CanonicalBlockedMessageEvent, CanonicalMessageEvent } from '../adaption-types';
@@ -152,6 +152,12 @@ export const createTelegramLiveHandlers = (deps: TelegramLiveHandlersDeps): Tele
         const blockedEvent = deps.chatPolicy.toBlockedMessageEvent(event);
         deps.logger.withFields({ chatId: event.chatId, messageId: event.messageId }).debug('Redacted message from blocked user');
         deps.eventSink.accept(blockedEvent, { notifyDriver: true });
+        return;
+      }
+
+      const poke = adaptPokeCommand(msg, deps.botUserId, deps.manager.bot.botInfo()?.username);
+      if (poke) {
+        deps.eventSink.accept(poke, { notifyDriver: true });
         return;
       }
 

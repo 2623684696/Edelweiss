@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { adaptDelete, adaptEdit, adaptMessage, adaptServiceEvent, contentToPlainText, isServiceMessage, parseContent, SPOILER_IMAGE_ALT_TEXT } from './adaption';
+import { adaptDelete, adaptEdit, adaptMessage, adaptPokeCommand, adaptServiceEvent, contentToPlainText, isServiceMessage, parseContent, SPOILER_IMAGE_ALT_TEXT } from './adaption';
 import type { ContentNode } from '../adaption-types';
 import type { MessageEntity, TelegramMessage, TelegramMessageEdit } from './message/types';
 
@@ -20,6 +20,50 @@ const baseTelegramMessage = (overrides?: Partial<TelegramMessage>): TelegramMess
 });
 
 // --- parseContent ---
+
+describe('adaptPokeCommand', () => {
+  const pokeMessage = (overrides: Partial<TelegramMessage> = {}) => baseTelegramMessage({
+    sender: { id: '42', firstName: 'Alice', isBot: false, isPremium: false },
+    text: '/poke@LizBot',
+    entities: [entity('bot_command', 0, 12)],
+    receivedAtMs: 1700000000123,
+    utcOffsetMin: 540,
+    ...overrides,
+  });
+
+  it.each(['bot', 'userbot'] as const)('adapts addressed commands from %s with actor and timestamps', source => {
+    expect(adaptPokeCommand(pokeMessage({ source }), '0', 'lizbot')).toMatchObject({
+      type: 'service', chatId: '-100123', actor: { id: '42' },
+      timestampSec: 1700000000, receivedAtMs: 1700000000123, utcOffsetMin: 540,
+      action: { action: 'poke', target: { id: '0' }, targetIsMyself: true },
+    });
+  });
+
+  it.each([
+    { text: '/poke @LizBot', entities: [entity('bot_command', 0, 5), entity('mention', 6, 7)] },
+    { text: '@LizBot /poke', entities: [entity('mention', 0, 7), entity('bot_command', 8, 5)] },
+    { text: '/poke Liz', entities: [entity('bot_command', 0, 5), entity('text_mention', 6, 3, { userId: '0' })] },
+  ])('accepts explicit mentions: $text', overrides => {
+    expect(adaptPokeCommand(pokeMessage(overrides), '0', 'LizBot')).not.toBeNull();
+  });
+
+  it.each<Partial<TelegramMessage>>([
+    { text: '/poke', entities: [entity('bot_command', 0, 5)] },
+    { text: '/poke@OtherBot', entities: [entity('bot_command', 0, 14)] },
+    { entities: [] },
+    { entities: [entity('code', 0, 12)] },
+    { entities: [entity('blockquote', 0, 12), entity('bot_command', 0, 12)] },
+    { text: '/poke @LizBot', entities: [entity('bot_command', 0, 5)] },
+    { text: '/poke Liz', entities: [entity('bot_command', 0, 5), entity('text_mention', 6, 3, { userId: '99' })] },
+    { text: '/poke@LizBot extra' },
+    { forwardInfo: { fromUserId: '42' } },
+    { sender: undefined },
+    { sender: { id: '0', firstName: 'Liz', isBot: false, isPremium: false } },
+    { sender: { id: '99', firstName: 'Other', isBot: true, isPremium: false } },
+  ])('rejects unauthorized or non-command messages: %j', overrides => {
+    expect(adaptPokeCommand(pokeMessage(overrides), '0', 'LizBot')).toBeNull();
+  });
+});
 
 describe('parseContent', () => {
   describe('basics', () => {

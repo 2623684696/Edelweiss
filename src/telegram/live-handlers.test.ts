@@ -5,7 +5,7 @@ import type { PipelineEvent } from '../pipeline';
 import type { TelegramEventSink } from './event-sink';
 import { createTelegramLiveHandlers } from './live-handlers';
 import type { TelegramManager } from './manager';
-import type { TelegramReactionCountUpdate, TelegramReactionSnapshotEntry, TelegramReactionUpdate, TelegramUser, TelegramUserReactionUpdate } from './message/types';
+import type { TelegramMessage, TelegramReactionCountUpdate, TelegramReactionSnapshotEntry, TelegramReactionUpdate, TelegramUser, TelegramUserReactionUpdate } from './message/types';
 import type { TelegramMessageStore, TelegramReactionStore } from './stores';
 
 setupLogger();
@@ -42,12 +42,13 @@ const countReaction = (overrides: Partial<TelegramReactionCountUpdate> = {}): Te
 });
 
 const createHarness = async () => {
+  let onMessage: ((msg: TelegramMessage) => void) | undefined;
   let onReactionUpdate: ((update: TelegramReactionUpdate) => void) | undefined;
   const commands = new Map<string, (chatId: string) => Promise<void>>();
   const sendMessage = vi.fn(async () => ({ messageId: 1, date: 1, text: '' }));
   const manager = {
     start: vi.fn(async () => {}),
-    onMessage: vi.fn(),
+    onMessage: vi.fn((handler: (msg: TelegramMessage) => void) => { onMessage = handler; }),
     onMessageEdit: vi.fn(),
     onMessageDelete: vi.fn(),
     onReactionUpdate: vi.fn((handler: (update: TelegramReactionUpdate) => void) => {
@@ -55,6 +56,7 @@ const createHarness = async () => {
     }),
     onTyping: vi.fn(),
     bot: {
+      botInfo: () => ({ username: 'LizBot' }),
       registerCommand: vi.fn((name: string, _description: string, handler: (chatId: string) => Promise<void>) => {
         commands.set(name, handler);
       }),
@@ -83,13 +85,14 @@ const createHarness = async () => {
   } satisfies TelegramReactionStore;
 
   const requestCompaction = vi.fn(async () => ({ status: 'skipped' as const, reason: 'no_content' as const }));
+  const isBlocked = vi.fn(() => false);
   const handlers = createTelegramLiveHandlers({
     manager,
     logger: useLogger('test'),
     botUserId: '0',
     eventSink,
     chatPolicy: {
-      isBlocked: vi.fn(() => false),
+      isBlocked,
       toBlockedMessageEvent: vi.fn(),
       blockedSenderIdsForChat: vi.fn(),
     },
@@ -117,10 +120,31 @@ const createHarness = async () => {
     commands,
     requestCompaction,
     sendMessage,
+    emitMessage: (msg: TelegramMessage) => onMessage!(msg),
+    isBlocked,
   };
 };
 
 describe('createTelegramLiveHandlers commands', () => {
+  it.each([false, true])('routes addressed /poke through service ingress with blocked=%s', async blocked => {
+    const harness = await createHarness();
+    harness.isBlocked.mockReturnValue(blocked);
+    harness.emitMessage({
+      messageId: 42, chatId: '-100123', date: 1700000000, source: 'bot', sender: user,
+      text: '/poke@LizBot', entities: [{ type: 'bot_command', offset: 0, length: 12 }],
+    });
+    if (blocked) {
+      expect(harness.accepted.some(event => event?.type === 'service')).toBe(false);
+    } else {
+      expect(harness.eventSink.accept).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'service', actor: expect.objectContaining({ id: '42' }),
+        action: expect.objectContaining({ action: 'poke', targetIsMyself: true }),
+      }), { notifyDriver: true });
+    }
+    expect(harness.eventSink.publish).not.toHaveBeenCalled();
+    expect(harness.eventSink.persist).not.toHaveBeenCalled();
+  });
+
   it('registers /compact and reports a no-op compaction', async () => {
     const { commands, requestCompaction, sendMessage } = await createHarness();
 

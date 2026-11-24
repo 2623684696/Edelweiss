@@ -211,6 +211,54 @@ const appendLinkPreview = (content: ContentNode[], preview?: LinkPreview): Conte
 
 export const captureUtcOffset = (): number => -new Date().getTimezoneOffset();
 
+export const adaptPokeCommand = (
+  msg: TelegramMessage,
+  botUserId: string,
+  botUsername?: string,
+): CanonicalServiceEvent | null => {
+  if (!msg.sender || msg.sender.id === botUserId || msg.sender.isBot
+    || msg.senderChatId || msg.forwardInfo || msg.attachments?.length) return null;
+
+  let mentioned = false;
+  let commands = 0;
+  let end = 0;
+  for (const entity of [...(msg.entities ?? [])].sort((a, b) => a.offset - b.offset)) {
+    if (entity.offset < end || msg.text.slice(end, entity.offset).trim()) return null;
+    const text = msg.text.slice(entity.offset, entity.offset + entity.length);
+    if (entity.type === 'bot_command') {
+      const match = /^\/poke(?:@([a-z0-9_]+))?$/i.exec(text);
+      if (!match || ++commands > 1) return null;
+      if (match[1]) {
+        if (!botUsername || match[1].toLowerCase() !== botUsername.toLowerCase()) return null;
+        mentioned = true;
+      }
+    } else if (entity.type === 'mention' && botUsername
+      && text.toLowerCase() === `@${botUsername.toLowerCase()}`) {
+      mentioned = true;
+    } else if (entity.type === 'text_mention' && entity.userId === botUserId) {
+      mentioned = true;
+    } else {
+      return null;
+    }
+    end = entity.offset + entity.length;
+  }
+  if (commands !== 1 || !mentioned || msg.text.slice(end).trim()) return null;
+
+  return {
+    type: 'service',
+    chatId: msg.chatId,
+    actor: adaptUser(msg.sender),
+    timestampSec: msg.date,
+    receivedAtMs: msg.receivedAtMs ?? Date.now(),
+    utcOffsetMin: msg.utcOffsetMin ?? captureUtcOffset(),
+    action: {
+      action: 'poke',
+      target: { id: botUserId, displayName: botUsername ?? botUserId, username: botUsername, isBot: true },
+      targetIsMyself: true,
+    },
+  };
+};
+
 export const adaptMessage = (msg: TelegramMessage, botUserId?: string): CanonicalMessageEvent => {
   const receivedAtMs = msg.receivedAtMs ?? Date.now();
   const utcOffsetMin = msg.utcOffsetMin ?? captureUtcOffset();
