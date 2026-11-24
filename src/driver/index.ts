@@ -82,7 +82,7 @@ export const createDriver = (config: DriverConfig, deps: {
   resolveModel: (name: string) => LlmEndpoint;
   imageConversations: ImageConversationManager;
   getChatMemoryStore?: (platform: string, chatId: string) => ChatMemoryStore;
-  getQqPrivateMemory?: (userId: string) => { groups: string[]; keys?: string[]; read: (groups: string[], keys?: string[]) => unknown } | undefined;
+  getQqPrivateMemory?: (userId: string) => CapabilityToolProviderDeps['qqPrivateMemory'];
   getImage2Endpoint?: (chatId: string) => LlmEndpoint | undefined;
   backgroundTask: {
     startTask: (typeName: string, sessionId: string, params: unknown, intention: string | undefined, timeoutMs: number) => number;
