@@ -57,12 +57,12 @@ You were mentioned — you will likely want to respond.
 Someone replied to your message — you will likely want to respond.
 </template>
 
-<template v-if="image2CommandGated && !image2Available">
-Image generation through `/image2` is command-gated in this OneBot chat. Its underlying tool is intentionally withheld during ordinary turns and becomes available only when a new message explicitly mentions you and invokes `/image2`. Do not mistake its absence in this turn for a permanent lack of image-generation capability, and never claim that you do not have `/image2` merely because it is not currently exposed. A message that only discusses or announces `/image2` is not an invocation and does not by itself require a response or an image.
+<template v-if="image2CommandGated">
+The `image2` tool remains visible in every turn. Initial generation requires an explicit `/image2` command in a new user message; an @mention is not required. The only exception is a new explicit user request to retry or regenerate an earlier `/image2` request, such as "再生成一次" or "重试一下". Without a new command or that explicit retry request, do not call `image2`, even if asked to draw in ordinary language. Historical commands alone, quoted replies, your own messages, and messages merely discussing or announcing `/image2` do not authorize generation. Do not claim that the tool is missing or needs to be loaded. Authorization lasts for the current turn's tool loop only. Never retry automatically; a retry must refer to the earlier image request, not an unrelated task.
 </template>
 
 <template v-if="image2Available">
-<template v-if="image2Requested">The latest input explicitly invoked `@bot /image2`. Treat the text after `/image2` as a direct image-generation request. When it contains enough information, call `image2` and then deliver the generated file with `send_message`; do not merely describe how to draw it. If the requested image is genuinely underspecified, ask one concise clarification instead.</template>
+<template v-if="image2Requested">The latest input authorizes image generation through `/image2` or an explicit retry of an earlier `/image2` request. Treat the text after `/image2` as a direct image-generation request; for a retry, reuse the earlier prompt and ordered references with the user's requested changes. When it contains enough information, call `image2` and then deliver the generated file with `send_message`; do not merely describe how to draw it. If the requested image is genuinely underspecified, ask one concise clarification instead.</template>
 
 When the request refers to numbered images, use the exact `file-id` mapped by each adjacent `<image-preview>` marker. To combine references, pass every source image in `file_ids` in the same order as the user's references.
 

@@ -99,14 +99,17 @@ describe('primary-system.velin.md', () => {
     expect(rendered).toContain('never create an automatic retry loop');
   });
 
-  it('explains transient OneBot image2 gating without exposing the tool', async () => {
+  it('keeps image2 visible while requiring a new command for execution', async () => {
     const rendered = await renderLateBinding({
       timeNow: '2025-01-01T00:00:00Z',
       image2CommandGated: true,
+      image2Available: true,
     });
-    expect(rendered).toContain('intentionally withheld during ordinary turns');
-    expect(rendered).toContain('never claim that you do not have `/image2`');
-    expect(rendered).not.toContain('Treat the text after `/image2` as a direct image-generation request');
+    expect(rendered).toContain('remains visible in every turn');
+    expect(rendered).toContain('Without a new command or that explicit retry request, do not call');
+    expect(rendered).toContain('an @mention is not required');
+    expect(rendered).not.toContain('intentionally withheld');
+    expect(rendered).not.toContain('The latest input authorizes image generation');
   });
 
   it('renders chat metadata after the current channel', async () => {
